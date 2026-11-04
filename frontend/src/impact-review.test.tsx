@@ -1,0 +1,56 @@
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
+import { afterEach, expect, it } from 'vitest'
+import { ImpactPanel } from './downstream'
+import { AuthContext, Preferences } from './components'
+import { LocaleProvider } from './i18n'
+import type { SystemDetail } from './types'
+
+afterEach(() => { cleanup(); localStorage.clear() })
+
+it('explains why accepted findings still need rationale, including hidden findings', () => {
+  const detail: SystemDetail = {
+    system: { id: 's', name: 'Test', status: 'RESULT_REVIEW', version: 1, revision: 1,
+      context: {}, draft: {}, classification: {}, created_at: 0, updated_at: 0 },
+    permissions: ['read', 'edit', 'review', 'manage'], controls: [], prd: null, round: null, baseline: null,
+    report: { id: 'r', mode: 'local', reviewed: false, decisions: {
+      f: { decision: 'accept', reason: '' }, _exceptions: { decision: 'accept', reason: 'No exceptions' },
+    }, data: { summary: 'Review', findings: [{ id: 'f', requirement_id: 'REQ-1', severity: 'unknown',
+      title: 'Evidence', evidence_field: 'implementation_plan', evidence: 'Plan', impact: 'Pending', recommendation: 'Verify' }] } },
+  }
+  render(<QueryClientProvider client={new QueryClient()}><LocaleProvider><AuthContext.Provider value={{
+    user: { id: 'm', name: 'Manager', email: 'm@test', role: 'member', org_id: 'org' }, csrf: '', model_configured: false,
+  }}><Preferences><MemoryRouter><ImpactPanel detail={detail} /></MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
+  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeDisabled()
+  expect(screen.getByRole('status')).toHaveTextContent('还有 1 项未填写理由与责任安排')
+  fireEvent.change(screen.getByLabelText('筛选严重度'), { target: { value: 'high' } })
+  expect(screen.getByRole('status')).toHaveTextContent('还有 1 项未填写理由与责任安排')
+  fireEvent.change(screen.getByLabelText('筛选严重度'), { target: { value: 'all' } })
+  fireEvent.click(screen.getByRole('button', { name: /点击查看与审查/ }))
+  expect(screen.getByRole('dialog')).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('理由与责任安排'), { target: { value: 'Owner will verify evidence before release' } })
+  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeEnabled()
+  expect(screen.queryByRole('status')).not.toBeInTheDocument()
+})
+
+it('bulk accepts submitted yes responses', () => {
+  const detail: SystemDetail = {
+    system: { id: 's', name: 'Test', status: 'RESULT_REVIEW', version: 1, revision: 1,
+      context: {}, draft: {}, classification: {}, created_at: 0, updated_at: 0 },
+    permissions: ['read', 'edit', 'review', 'manage'], controls: [], prd: null, round: { id: 'round', status: 'submitted', version: 1, supplier_org_id: 'supplier', draft: { 'REQ-1': { implementation_status: 'yes', duration_workdays: 5, owner_name: 'Supplier', implementation_plan: 'Deliver', limitations: '', alternative: '' } } }, baseline: null,
+    report: { id: 'r', mode: 'local', reviewed: false, decisions: {
+      f: { decision: '', reason: '' }, _exceptions: { decision: 'accept', reason: 'No exceptions' },
+    }, data: { summary: 'Review', findings: [{ id: 'f', requirement_id: 'REQ-1', severity: 'unknown',
+      title: 'Evidence', evidence_field: 'implementation_plan', evidence: 'Plan', impact: 'Pending', recommendation: 'Verify' }] } },
+  }
+  render(<QueryClientProvider client={new QueryClient()}><LocaleProvider><AuthContext.Provider value={{
+    user: { id: 'm', name: 'Manager', email: 'm@test', role: 'member', org_id: 'org' }, csrf: '', model_configured: false,
+  }}><Preferences><MemoryRouter><ImpactPanel detail={detail} /></MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
+  fireEvent.click(screen.getByRole('button', { name: /一键接受可实施项/ }))
+  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: /一键接受可实施项/ })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: /点击查看与审查/ }))
+  expect(screen.getByLabelText('客户决定')).toHaveValue('accept')
+  expect((screen.getByLabelText('理由与责任安排') as HTMLTextAreaElement).value).toContain('接受供应商可实施承诺')
+})

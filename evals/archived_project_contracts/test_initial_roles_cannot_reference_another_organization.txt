@@ -1,0 +1,11 @@
+def test_initial_roles_cannot_reference_another_organization(owner):
+    app, first = owner
+    pid = first.post('/api/v1/admin/projects', json={'name': 'Private project'}).json()['id']
+    with TestClient(app) as outsider:
+        register(outsider, 'outsider@example.test')
+        result = outsider.post('/api/v1/admin/users', json={
+            'username': 'cross-org', 'name': 'Rejected', 'project_id': pid, 'roles': ['manager'],
+        })
+        assert result.status_code == 404
+    with app.state.sessions() as db:
+        assert db.scalar(select(AccountPolicy).where(AccountPolicy.username == 'cross-org')) is None

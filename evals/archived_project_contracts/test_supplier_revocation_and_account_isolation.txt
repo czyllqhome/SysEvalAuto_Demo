@@ -1,0 +1,23 @@
+def test_supplier_revocation_and_account_isolation(owner):
+    app, client, sid, project, supplier, vendor, _ = setup(owner)
+    command(client, sid, 'supplier-rounds', {'supplier_user_id': supplier['id']})
+    other = create_account(client, project, 'supplier_two', 'supplier')
+    with app.state.sessions() as db:
+        db.get(AccountPolicy, other['id']).must_change_password = False
+        db.commit()
+    other_client = TestClient(app)
+    login(other_client, 'supplier_two', other['temporary_password'])
+    assert other_client.get(f'/api/v1/systems/{sid}').status_code == 404
+    assert other_client.get('/api/v1/systems').json() == []
+    assert client.put(f"/api/v1/admin/users/{supplier['id']}", json={'is_admin': True}).status_code == 403
+    assert client.put(f"/api/v1/admin/projects/{project}/members/{supplier['id']}",
+                      json={'roles': ['supplier', 'operator']}).status_code == 403
+    assert client.put(f"/api/v1/admin/projects/{project}/members/{supplier['id']}",
+                      json={'roles': []}).status_code == 200
+    login(vendor, 'supplier_one', supplier['temporary_password'])
+    assert vendor.get('/api/v1/systems').json() == []
+    assert vendor.get(f'/api/v1/systems/{sid}').status_code == 404
+    foreign = TestClient(app)
+    register(foreign, 'foreign@example.test')
+    assert foreign.put(f"/api/v1/admin/users/{supplier['id']}", json={'active': False}).status_code == 404
+    assert client.post(f"/api/v1/admin/users/{supplier['id']}/reset-password").status_code == 200

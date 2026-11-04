@@ -1,0 +1,24 @@
+def project_setup(owner):
+    app, admin = owner
+    pid = admin.post("/api/v1/admin/projects", json={"name": "Integration"}).json()["id"]
+    users = {}
+    for role in ["manager", "operator", "reviewer", "viewer"]:
+        uid, client = new_member(app, admin, role)
+        assert (
+            admin.put(f"/api/v1/admin/projects/{pid}/members/{uid}", json={"roles": [role]}).status_code
+            == 200
+        )
+        login(client, role)
+        users[role] = (uid, client)
+    manager = users["manager"][1]
+    response = manager.post(
+        "/api/v1/systems",
+        json={
+            "name": "Project system",
+            "project_id": pid,
+            "operator_id": users["operator"][0],
+            "reviewer_ids": [users["reviewer"][0]],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return app, admin, pid, users, response.json()["system"]["id"]

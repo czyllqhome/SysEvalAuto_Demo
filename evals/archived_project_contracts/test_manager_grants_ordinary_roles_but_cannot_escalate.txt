@@ -1,0 +1,19 @@
+def test_manager_grants_ordinary_roles_but_cannot_escalate(owner):
+    app, admin, pid, users, sid = project_setup(owner)
+    manager = users['manager'][1]
+    uid, account = new_member(app, admin, 'unassigned')
+    path = f'/api/v1/admin/projects/{pid}/members/{uid}'
+    team = manager.get('/api/v1/team').json()
+    assert uid in {u['id'] for u in team['users']}
+    assert sid in {s['id'] for s in team['assessments']}
+    assert manager.put(path, json={'roles': ['operator', 'viewer']}).status_code == 200
+    login(account, 'unassigned')
+    assert account.get(f'/api/v1/systems/{sid}').status_code == 200
+    assert manager.put(path, json={'roles': ['manager']}).status_code == 403
+    assert manager.put(f'/api/v1/admin/users/{uid}', json={'is_admin': True}).status_code == 403
+    for target in (users['manager'][0], admin.get('/api/v1/auth/session').json()['user']['id']):
+        assert manager.put(f'/api/v1/admin/projects/{pid}/members/{target}', json={'roles': []}).status_code == 403
+    other = admin.post('/api/v1/admin/projects', json={'name': 'Other project'}).json()['id']
+    assert manager.put(f'/api/v1/admin/projects/{other}/members/{uid}', json={'roles': ['viewer']}).status_code == 403
+    assert manager.put(path, json={'roles': []}).status_code == 200
+    assert account.get('/api/v1/auth/session').status_code == 401

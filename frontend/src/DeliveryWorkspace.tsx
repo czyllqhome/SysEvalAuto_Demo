@@ -1,0 +1,75 @@
+import { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useParams } from 'react-router-dom'
+import { api, ApiError, uploadEvidence } from './api'
+import { Button, Notice } from './components'
+import { useLocale } from './i18n'
+
+interface Attachment { id: string; filename: string; mime: string; size: number; sha256: string; meta: Record<string, string> }
+interface Review { decision: string; reason: string; mode: string }
+interface Submission { id: string; round_no: number; manifest_hash: string; payload: { draft: Draft; attachments: Attachment[] }; review: Review | null }
+interface Draft { description?: string; environment?: string; system_version?: string; collected_on?: string; attachment_ids?: string[]; criteria_evidence_map?: Record<string, string[]> }
+interface Item { id: string; source_id: string; status: string; version: number; criteria: { id: string; text: string }[]; draft: Draft; snapshot: { finding: { title?: string; reason?: string; severity?: string }; requirement?: { description: string } }; attachments: Attachment[]; submissions: Submission[] }
+interface Batch { id: string; name: string; system_id: string; kind: string; status: string; source_hash: string; version: number; total: number; approved: number; allowed_actions: string[]; items: Item[] }
+
+export function DeliveryInbox() {
+  const { t } = useLocale()
+  const query = useQuery({ queryKey: ['delivery-inbox'], queryFn: () => api<Batch[]>('/delivery-batches') })
+  return <section className="paper-panel"><h2>{t('交付证据与审核', 'Delivery evidence & review')}</h2>{query.error && <Notice error>{t('无法读取交付任务', 'Could not load delivery tasks')}</Notice>}{query.data?.map(b => <p key={b.id}><Link to={`/delivery/${b.id}`}>{b.name}</Link> · {b.approved}/{b.total} · {b.status === 'SUPERSEDED' ? t('来源已更新', 'Source superseded') : b.status === 'REVIEW_COMPLETE' ? t('交付审核完成', 'Delivery review complete') : t('交付执行中', 'Delivery in progress')}</p>)}{query.data?.length === 0 && <p>{t('暂无交付任务。双方确认后，可在评估工作区开启交付跟踪。', 'No delivery tasks. Start tracking from the assessment after agreement.')}</p>}</section>
+}
+
+export function DeliveryStart({ systemId, version, planId, canManage = false }: { systemId: string; version: number; planId?: string; canManage?: boolean }) {
+  const { t } = useLocale(), cache = useQueryClient()
+  const [failure, setFailure] = useState(''), [busy, setBusy] = useState(false)
+  return <div>{failure && <Notice error>{failure}</Notice>}{canManage && <Button busy={busy} onClick={async () => {
+    setBusy(true); setFailure('')
+    try { const b = await api<Batch>(`/systems/${systemId}/delivery-batches`, { method: 'POST', key: crypto.randomUUID(), body: { version, source_kind: planId ? 'plan' : 'baseline', source_id: planId } }); await cache.invalidateQueries(); window.location.assign(`/delivery/${b.id}`) }
+    catch (e) { setFailure(`${t('无法开启交付，请检查来源与版本', 'Could not start delivery; check source and version')}: ${e instanceof ApiError ? e.code : 'NETWORK_ERROR'}`) } finally { setBusy(false) }
+  }}>{t('开启交付证据跟踪', 'Start delivery evidence tracking')}</Button>} <Link to="/deliveries">{t('查看交付任务', 'View delivery tasks')}</Link></div>
+}
+
+export default function DeliveryWorkspace() {
+  const { id = '' } = useParams(), { t, error: translate } = useLocale(), cache = useQueryClient()
+  const query = useQuery({ queryKey: ['delivery', id], queryFn: () => api<Batch>(`/delivery-batches/${id}`) })
+  const [filter, setFilter] = useState(''), [failure, setFailure] = useState(''), [busy, setBusy] = useState(false)
+  if (query.error) return <Notice error>{t('无法访问交付任务', 'Delivery task unavailable')}</Notice>
+  if (!query.data) return <p>{t('正在加载…', 'Loading…')}</p>
+  const batch = query.data
+  const status = (s: string) => ({ OPEN: t('待提交', 'Awaiting submission'), IN_REVIEW: t('待审核', 'Awaiting review'), APPROVED: t('通过', 'Passed'), CHANGES_REQUESTED: t('需修改或补证', 'Changes or evidence required'), SUPERSEDED: t('来源已更新', 'Source superseded'), ACTIVE: t('交付执行中', 'Delivery in progress'), REVIEW_COMPLETE: t('交付审核完成', 'Delivery review complete') }[s] ?? s)
+  async function refresh() { await cache.invalidateQueries({ queryKey: ['delivery', id] }); await cache.invalidateQueries({ queryKey: ['delivery-inbox'] }) }
+  return <section><Link to="/deliveries">{t('返回交付任务', 'Back to delivery tasks')}</Link><h1>{batch.name} · {t('交付证据与审核', 'Delivery evidence & review')}</h1>
+    <p>{status(batch.status)} · {t('必需项通过', 'Required items passed')} {batch.approved}/{batch.total}</p><details><summary>{t('来源基线', 'Source baseline')}</summary><code>{batch.source_hash}</code></details>
+    {batch.kind === 'plan' && <Notice>{t('逐项审核通过后仍需客户执行计划级复测，才能关闭差距。', 'Customer plan-level retesting is still required before gaps close.')}</Notice>}
+    {batch.total === 0 && <Notice>{t('无来源项，需负责人核对，不自动视为通过。', 'No source items. Owner review is required; this is not an automatic pass.')}</Notice>}
+    {failure && <Notice error>{failure}</Notice>}
+    <label>{t('筛选状态', 'Filter status')}<select value={filter} onChange={e => setFilter(e.target.value)}><option value="">{t('全部', 'All')}</option>{['OPEN', 'IN_REVIEW', 'APPROVED', 'CHANGES_REQUESTED'].map(s => <option key={s} value={s}>{status(s)}</option>)}</select></label>
+    {batch.items.filter(i => !filter || i.status === filter).map(item => <ItemPanel key={item.id} batch={batch} item={item} refresh={refresh} status={status} />)}
+    {batch.allowed_actions.includes('complete') && batch.status === 'ACTIVE' && <Button busy={busy} disabled={!batch.total || batch.approved !== batch.total} onClick={async () => { setBusy(true); try { await api(`/delivery-batches/${id}/complete`, { method: 'POST', key: crypto.randomUUID(), body: { version: batch.version } }); await refresh() } catch (e) { setFailure(`${t('无法完成', 'Could not complete')}: ${translate(e instanceof ApiError ? e.code : 'NETWORK_ERROR')} (${e instanceof ApiError ? e.code : 'NETWORK_ERROR'})`) } finally { setBusy(false) } }}>{t('完成本批交付审核', 'Complete delivery review')}</Button>}
+  </section>
+}
+
+function ItemPanel({ batch, item, refresh, status }: { batch: Batch; item: Item; refresh: () => Promise<void>; status: (s: string) => string }) {
+  const { t, error: translate } = useLocale()
+  const [draft, setDraft] = useState<Draft>(item.draft), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [failure, setFailure] = useState('')
+  const [decision, setDecision] = useState('NEEDS_MORE_EVIDENCE'), [reason, setReason] = useState(''), [checks, setChecks] = useState<string[]>([])
+  const editable = batch.allowed_actions.includes('upload') && ['OPEN', 'CHANGES_REQUESTED'].includes(item.status)
+  const reviewable = batch.allowed_actions.includes('review')
+  useEffect(() => { const warn = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); e.returnValue = '' } }; window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn) }, [dirty])
+  useEffect(() => { if (!dirty) setDraft(item.draft) }, [item.draft, dirty])
+  function change(value: Partial<Draft>) { setDraft(d => ({ ...d, ...value })); setDirty(true) }
+  async function run(operation: () => Promise<unknown>) { setBusy(true); setFailure(''); try { await operation(); await refresh() } catch (e) { setFailure(`${t('操作失败，输入已保留；版本冲突时请刷新核对。', 'Action failed; input retained. Refresh and compare on version conflicts.')} ${translate(e instanceof ApiError ? e.code : 'NETWORK_ERROR')} (${e instanceof ApiError ? e.code : 'NETWORK_ERROR'})`) } finally { setBusy(false) } }
+  const latest = item.submissions.at(-1)
+  const attachment = (a: Attachment) => <div key={a.id}><a href={`/api/v1/evidence-attachments/${a.id}/content`}>{a.filename}</a> · {Math.ceil(a.size / 1024)} KB · {a.meta.environment} / {a.meta.system_version} · {a.meta.collected_on}{a.mime.startsWith('image/') && <details><summary>{t('查看截图', 'View screenshot')}</summary><img style={{ maxWidth: '100%', maxHeight: 500 }} alt={a.filename} src={`/api/v1/evidence-attachments/${a.id}/preview`} loading="lazy" /></details>}</div>
+  return <article className="paper-panel"><h3>{item.snapshot.finding.title || item.snapshot.finding.reason || item.source_id}</h3><p>{status(item.status)}</p><p>{item.snapshot.requirement?.description}</p><ul>{item.criteria.map(c => <li key={c.id}>{c.id}: {c.text}</li>)}</ul>
+    {failure && <Notice error>{failure}</Notice>}
+    {editable && <fieldset disabled={busy}><legend>{t('供应商证据草稿', 'Supplier evidence draft')}</legend>{(['description', 'environment', 'system_version', 'collected_on'] as const).map((key, index) => <label key={key}>{[t('完成与证据说明', 'Completion and evidence description'), t('环境', 'Environment'), t('系统版本', 'System version'), t('采集日期', 'Collection date')][index]}<input type={key === 'collected_on' ? 'date' : 'text'} value={draft[key] ?? ''} maxLength={key === 'description' ? 8000 : 200} onChange={e => change({ [key]: e.target.value })} /></label>)}
+      <label>{t('上传截图或文件（每个最多 20 MiB）', 'Upload screenshot or file (20 MiB maximum each)')}<input type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx,.txt,.csv,.md" onChange={e => { const file = e.target.files?.[0]; if (file) void run(async () => { const result = await uploadEvidence<Batch & { attachment: Attachment }>(item.id, file, { ...draft, filename: file.name, version: item.version }); change({ attachment_ids: [...(draft.attachment_ids ?? []), result.attachment.id] }) }); e.target.value = '' }} /></label>
+      {item.attachments.map(a => <div key={a.id}><label className="check-label"><input type="checkbox" checked={draft.attachment_ids?.includes(a.id) ?? false} onChange={e => change({ attachment_ids: e.target.checked ? [...(draft.attachment_ids ?? []), a.id] : draft.attachment_ids?.filter(id => id !== a.id) })} />{t('本轮使用', 'Use this round')}</label>{attachment(a)}</div>)}
+      {item.criteria.map(c => <fieldset key={c.id}><legend>{c.id} · {t('证明此条件的附件', 'Evidence for this criterion')}</legend>{item.attachments.filter(a => draft.attachment_ids?.includes(a.id)).map(a => <label key={a.id} className="check-label"><input type="checkbox" checked={draft.criteria_evidence_map?.[c.id]?.includes(a.id) ?? false} onChange={e => { const values = draft.criteria_evidence_map?.[c.id] ?? []; change({ criteria_evidence_map: { ...draft.criteria_evidence_map, [c.id]: e.target.checked ? [...values, a.id] : values.filter(id => id !== a.id) } }) }} />{a.filename}</label>)}</fieldset>)}
+      <Button onClick={() => void run(async () => { await api(`/delivery-items/${item.id}/draft`, { method: 'PUT', key: crypto.randomUUID(), body: { version: item.version, draft } }); setDirty(false) })}>{t('保存草稿', 'Save draft')}</Button> <Button disabled={dirty} onClick={() => void run(() => api(`/delivery-items/${item.id}/submissions`, { method: 'POST', key: crypto.randomUUID(), body: { version: item.version, expected_source_hash: batch.source_hash } }))}>{t('正式提交', 'Submit evidence')}</Button>{dirty && <p>{t('请先保存草稿再提交。', 'Save the draft before submitting.')}</p>}
+    </fieldset>}
+    {item.submissions.map(s => <details key={s.id} open={s.id === latest?.id}><summary>{t('提交轮次', 'Submission round')} {s.round_no} · {s.review ? s.review.decision : t('待审核', 'Awaiting review')}</summary><p>{s.payload.draft.description}</p>{s.payload.attachments.map(attachment)}{s.review && <p>{t('人工审核结论', 'Human review decision')}: {s.review.decision} · {s.review.reason}</p>}<code>{s.manifest_hash}</code></details>)}
+    {reviewable && latest && item.status === 'IN_REVIEW' && <fieldset disabled={busy}><legend>{t('人工审核', 'Human review')}</legend><label>{t('结论', 'Decision')}<select value={decision} onChange={e => setDecision(e.target.value)}><option value="NEEDS_MORE_EVIDENCE">{t('需补证', 'More evidence required')}</option><option value="FAIL">{t('不通过', 'Failed')}</option><option value="PASS">{t('通过', 'Passed')}</option></select></label>{item.criteria.map(c => <label className="check-label" key={c.id}><input type="checkbox" checked={checks.includes(c.id)} onChange={e => setChecks(e.target.checked ? [...checks, c.id] : checks.filter(x => x !== c.id))} />{t('已核对并满足', 'Verified and satisfied')}: {c.text}</label>)}<label>{t('审核依据', 'Review rationale')}<textarea value={reason} onChange={e => setReason(e.target.value)} maxLength={8000} /></label><Button disabled={!reason.trim() || decision === 'PASS' && checks.length !== item.criteria.length} onClick={() => void run(() => api(`/delivery-submissions/${latest.id}/reviews`, { method: 'POST', key: crypto.randomUUID(), body: { version: item.version, submission_hash: latest.manifest_hash, source_hash: batch.source_hash, decision, reason, criteria_results: item.criteria.filter(c => checks.includes(c.id)).map(c => ({ criterion_id: c.id, result: 'PASS', attachment_ids: latest.payload.draft.criteria_evidence_map?.[c.id] ?? [] })) } }))}>{t('保存审核结论', 'Save review decision')}</Button></fieldset>}
+    {reviewable && item.status === 'APPROVED' && <fieldset disabled={busy}><label>{t('重新打开原因', 'Reason to reopen')}<input value={reason} onChange={e => setReason(e.target.value)} /></label><Button disabled={!reason.trim()} onClick={() => void run(() => api(`/delivery-items/${item.id}/reopen`, { method: 'POST', key: crypto.randomUUID(), body: { version: item.version, reason } }))}>{t('重新打开', 'Reopen')}</Button></fieldset>}
+  </article>
+}

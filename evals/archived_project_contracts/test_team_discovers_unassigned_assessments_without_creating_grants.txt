@@ -1,0 +1,16 @@
+def test_team_discovers_unassigned_assessments_without_creating_grants(owner):
+    app, client = owner
+    result = client.post('/api/v1/systems', json={'name': '户外运动 AI 助手'}).json()
+    sid = result['system']['id']
+    before = client.get('/api/v1/team').json()
+    assert before['assessments'] == [{'id': sid, 'name': '户外运动 AI 助手', 'project_id': None}]
+    assert before['projects'] == []
+    pid = client.post('/api/v1/admin/projects', json={'name': '户外运动 AI 助手'}).json()['id']
+    after = client.get('/api/v1/team').json()
+    assert after['projects'][0]['id'] == pid
+    assert after['projects'][0]['roles'] == []
+    assert after['assessments'][0]['project_id'] is None
+    assert client.get(f'/api/v1/systems/{sid}').json()['system']['version'] == result['system']['version']
+    with TestClient(app) as outsider:
+        register(outsider, 'other-org@example.test')
+        assert outsider.get('/api/v1/team').json()['assessments'] == []

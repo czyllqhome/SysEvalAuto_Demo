@@ -1,0 +1,46 @@
+def test_csv_preview_does_not_publish_partial_content(owner):
+    app, client = owner
+    raw = ("catalog_code,catalog_version,scheme_code,scheme_revision,control_code,domain_code,title,description,applicable_levels,required,verification_guidance\n"
+           "NEW,R1,SYS-RISK,R1,C-1,IAM,Title,Description,L1,true,Verify\n"
+           "NEW,R1,SYS-RISK,R1,C-1,IAM,Title,Description,L1,true,Verify\n")
+    response = client.post("/api/v1/catalog-imports", files={"file": ("controls.csv", raw.encode(), "text/csv")})
+    assert response.status_code == 200, response.text
+    preview = response.json()
+    assert preview["errors"]
+    assert client.post(f"/api/v1/catalog-imports/{preview['id']}/publish").status_code == 422
+    with app.state.sessions() as db:
+        assert db.scalar(select(func.count()).select_from(Catalog)) == 1
+
+
+def test_custom_control_stays_with_its_project(owner):
+    _, client, sid = prepare(owner)
+    result = command(client, sid, "custom-controls", {"title": "Project-only record", "description": "A specific delivery constraint",
+                     "verification": "Verify the declared constraint", "domain": "DELIVERY"}).json()
+    custom = next(c for c in result["controls"] if c["origin"] == "custom")
+    global_catalog = client.get("/api/v1/controls").json()
+    assert custom["id"] not in {c["id"] for c in global_catalog["items"]}
+    second = client.post("/api/v1/systems", json={"name": "Another project"}).json()["system"]["id"]
+    command(client, second, "classification-confirmations", {"mode": "manual", "level": "L1", "reason": "Pilot"})
+    command(client, second, "context-confirmations", {"context": BRIEF})
+    response = command(client, second, "controls", {"control_id": custom["id"], "included": True}, expected=404)
+    assert response.json()["code"] == "NOT_FOUND"
+
+
+def test_unknown_tag_is_a_candidate_and_blocks_silent_exclusion(owner):
+    _, client = owner
+    raw = ("catalog_code,catalog_version,scheme_code,scheme_revision,control_code,domain_code,title,description,applicable_levels,required,applicability_tags,verification_guidance\n"
+           "CONDITIONAL,R1,SYS-RISK,R1,BASE,IAM,Base,Base requirement,L1|L2|L3,true,,Verify base\n"
+           "CONDITIONAL,R1,SYS-RISK,R1,EXTERNAL,IAM,External,External access requirement,L1|L2|L3,true,external_access,Verify external\n")
+    imported = client.post("/api/v1/catalog-imports", files={"file": ("controls.csv", raw.encode(), "text/csv")}).json()
+    assert not imported["errors"]
+    assert client.post(f"/api/v1/catalog-imports/{imported['id']}/publish").status_code == 200
+    sid = client.post("/api/v1/systems", json={"name": "Conditional scope"}).json()["system"]["id"]
+    command(client, sid, "classification-confirmations", {"mode": "manual", "level": "L1", "reason": "Bounded pilot"})
+    result = command(client, sid, "context-confirmations", {"context": BRIEF}).json()
+    candidate = next(c for c in result["controls"] if c["code"] == "EXTERNAL")
+    assert not candidate["included"] and candidate["origin"] == "candidate"
+    response = command(client, sid, "jobs", {"kind": "prd_generation", "mode": "local", "language": "en"}, expected=409)
+    assert response.json()["code"] == "APPLICABILITY_REVIEW_REQUIRED"
+    command(client, sid, "controls", {"control_id": candidate["id"], "included": False,
+                                      "reason": "Owner confirms internal-only deployment"})
+    assert command(client, sid, "jobs", {"kind": "prd_generation", "mode": "local", "language": "en"}).status_code == 200

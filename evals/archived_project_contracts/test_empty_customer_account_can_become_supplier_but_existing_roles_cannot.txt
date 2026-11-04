@@ -1,0 +1,15 @@
+def test_empty_customer_account_can_become_supplier_but_existing_roles_cannot(owner):
+    app, client = owner
+    project = client.post('/api/v1/admin/projects', json={'name': 'Project'}).json()['id']
+    response = client.post('/api/v1/admin/users', json={'username': 'unassigned', 'name': 'Unassigned'})
+    uid = response.json()['id']
+    assert client.put(f'/api/v1/admin/projects/{project}/members/{uid}', json={'roles': ['supplier']}).status_code == 200
+    with app.state.sessions() as db:
+        assert db.get(User, uid).role == 'vendor'
+    staff = create_account(client, project, 'staff_user', 'operator')
+    assert client.put(f"/api/v1/admin/projects/{project}/members/{staff['id']}", json={'roles': ['supplier']}).status_code == 403
+    response = client.post('/api/v1/admin/users', json={'username': 'invalid_mix', 'name': 'Mix',
+                           'project_id': project, 'roles': ['supplier', 'manager']})
+    assert response.status_code == 403
+    with app.state.sessions() as db:
+        assert not db.scalar(select(AccountPolicy).where(AccountPolicy.username == 'invalid_mix'))

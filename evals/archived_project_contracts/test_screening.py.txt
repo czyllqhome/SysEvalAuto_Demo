@@ -1,0 +1,65 @@
+def test_screening_without_library_can_confirm_but_cannot_claim_control_readiness(owner):
+    _, client = owner
+    detail = client.post('/api/v1/systems', json={'name': 'Initial screening'}).json()
+    path = '/api/v1/systems/' + detail['system']['id']
+    settings = client.get(path + '/screening').json()
+    assert settings['catalog_id'] is None
+    assert any(q['code'] == 'screen.personal_count' for q in settings['config']['questions'])
+    body = {'scheme': screening.SCHEME, 'version': detail['system']['version'], 'facts': low(), 'frameworks': ['MLPS']}
+    result = client.post(path + '/screening/preview', json=body)
+    assert result.status_code == 200, result.text
+    assert result.json()['recommended_level'] == 'L1'
+    assert result.json()['controls_ready'] is False
+    result = client.post(path + '/classification-confirmations', json=body)
+    assert result.status_code == 200, result.text
+    assert result.json()['system']['classification']['missing_frameworks'] == ['MLPS']
+
+
+def test_framework_and_level_matching_preserves_source_boundaries(owner):
+    app, client = owner
+    first = control('MLPS-CONTROL')
+    first['source_framework'] = 'MLPS'
+    second = copy.deepcopy(first)
+    second.update(control_code='NIST-CONTROL', source_framework='NIST')
+    add(client, first)
+    add(client, second)
+    publish(client)
+    detail = client.post('/api/v1/systems', json={'name': 'Framework selection'}).json()
+    path = '/api/v1/systems/' + detail['system']['id']
+    body = {'scheme': screening.SCHEME, 'version': detail['system']['version'], 'facts': {**low(), 'net.public_ingress': 'yes'}, 'frameworks': ['MLPS']}
+    result = client.post(path + '/screening/preview', json=body).json()
+    assert result['controls_ready'] is True
+    assert {m['code']: m['status'] for m in result['matches']} == {'MLPS-CONTROL': 'applicable', 'NIST-CONTROL': 'inapplicable'}
+    assert client.post(path + '/classification-confirmations', json=body).status_code == 200
+    from app.db import System
+    from app.service import match_profile_controls, selections
+    with app.state.sessions.begin() as db:
+        system = db.get(System, detail['system']['id'])
+        match_profile_controls(db, system)
+        assert {s.snapshot['code']: s.included for s in selections(db, system)} == {'MLPS-CONTROL': True, 'NIST-CONTROL': False}
+    with TestClient(app) as other:
+        register(other, 'screen-other@example.test')
+        assert other.get(path + '/screening').status_code == 404
+        assert other.post(path + '/screening/preview', json=body).status_code == 404
+
+
+@pytest.mark.parametrize('level', [2, 3])
+def test_system_level_selects_only_corresponding_mlps_profile(owner, level):
+    _, client = owner
+    for source_level in (2, 3):
+        item = control(f'MLPS-LEVEL-{source_level}')
+        item.update(source_framework='MLPS', source_level=source_level,
+                    assessment_profiles=[f'MLPS{source_level}_REFERENCE'])
+        add(client, item)
+    publish(client)
+    detail = client.post('/api/v1/systems', json={'name': 'MLPS level routing'}).json()
+    facts = {**low(), 'risk.business_impact': 'business' if level == 2 else 'severe'}
+    result = client.post(f'/api/v1/systems/{detail["system"]["id"]}/screening/preview',
+                         json={'facts': facts, 'frameworks': ['MLPS']})
+    assert result.status_code == 200, result.text
+    data = result.json()
+    assert data['effective_level'] == f'L{level}'
+    assert data['controls_ready'] is True
+    assert {m['code']: m['status'] for m in data['matches']} == {
+        f'MLPS-LEVEL-{candidate}': 'applicable' if candidate == level else 'inapplicable'
+        for candidate in (2, 3)}

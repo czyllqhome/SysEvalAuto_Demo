@@ -1,0 +1,102 @@
+{
+  "source_org_id": "d7ebdad5-1939-4426-8031-92f973a55f02",
+  "source_system_id": "86a91743-aaf2-4224-b8b7-5ebab6773820",
+  "source_system_version": 21,
+  "captured_at": "2026-11-03T14:18:27.319937+00:00",
+  "visible_question_count": 39,
+  "schema_profile": "AmerSports-2.14",
+  "template": {
+    "answers": {
+      "system_name": "户外运动与产品介绍AI客服",
+      "system_business_type": [
+        "会员运营与客户服务",
+        "品牌营销与活动"
+      ],
+      "system_owner": [
+        "零售运营",
+        "会员与客户服务",
+        "品牌与市场营销"
+      ],
+      "org_name": "Amer Sports",
+      "target_type": "人工智能应用",
+      "deployment_model": [
+        "公有云"
+      ],
+      "external_network_access": "存在公众可访问入口",
+      "network_zones_description": "系统拟采用云端部署架构，面向互联网提供服务。\nWeb 访问入口位于公网接入区域，应用服务、知识库及数据存储组件部署于受访问控制保护的应用网络区域。",
+      "internet_entry_description": "用户通过互联网使用 HTTPS 访问 AI 客服助手。\n系统通过 Web 前端或嵌入式聊天窗口提供交互服务。\n通过防火墙、WAF 等安全组件保护公网访问入口。",
+      "external_connections_description": "通过 API 调用第三方大语言模型服务。\n按实际部署情况，与云服务供应商提供的基础设施及安全服务连接。",
+      "system_interfaces_description": "前端与后端之间的 API 接口，用于提交用户问题及返回 AI 生成结果。\nAI 模型服务接口，用于自然语言理解和答案生成。\n产品知识库接口，用于获取产品介绍、技术参数及运动知识。\n日志和监控接口，用于记录系统运行状态、安全事件及服务异常。",
+      "system_interaction": "是",
+      "system_purpose": "通过人工智能技术，为用户提供全天候的产品咨询和户外运动知识问答服务，提高客户服务效率、改善用户体验并降低人工客服的重复性工作量。",
+      "system_functions": "1. 产品信息查询，包括运动服装、鞋类、户外装备等产品的功能、材质及使用说明。\n2. 根据用户需求提供运动装备选择建议及产品推荐。\n3. 提供徒步、登山、滑雪、越野跑等户外运动的基础知识和装备使用建议。\n4. 回答产品保养、使用方法及常见问题。\n5. 通过自然语言交互，为用户提供智能化信息检索与问答服务。",
+      "system_scenarios": "用户通过网页访问 AI 客服助手，询问某款户外装备的功能、适用环境、使用方式，或咨询户外活动所需的装备建议。系统通过 AI 模型结合产品知识库生成答复。\n\n系统主要提供信息咨询服务，不直接处理在线支付、订单交易或物流管理业务。",
+      "security_responsible_entity": "是",
+      "independent_business": "否",
+      "user_types": [
+        "会员与消费者"
+      ],
+      "registered_users": "超过 10,000 人",
+      "service_geography": "全国",
+      "public_service_nature": "否",
+      "critical_business": "非核心",
+      "data_categories": [
+        "公开信息",
+        "商品与价格数据",
+        "会员与营销数据",
+        "个人信息"
+      ],
+      "personal_info_count_system": "超过 50,000 人",
+      "pi_subject_scope": [
+        "会员与消费者"
+      ],
+      "data_volume_ranges": {
+        "records": "under_100k",
+        "storage": "1_10tb"
+      },
+      "data_security_classification": "一般",
+      "cross_border_data": "否",
+      "data_integrity_criticality": [
+        "商品与价格错误",
+        "客户权益受损",
+        "会员权益或营销决策错误"
+      ],
+      "system_dependencies": "无下游系统",
+      "available_workaround": "部分替代",
+      "safety_impact": "否",
+      "external_dependency_impact": "否",
+      "impact_after_4h": "短时间服务中断\n用户暂时无法使用 AI 客服查询产品信息或获取户外运动建议，部分用户需要转向官方网站、FAQ 或人工客服。预计不会影响产品销售、订单处理及支付等核心业务的正常运行。",
+      "impact_after_24h": "持续性客户服务能力下降\nAI 客服全天无法使用，用户咨询可能集中转向人工客服，增加人员工作量和响应延迟。持续故障可能引发用户投诉，影响客户满意度和品牌服务体验，但通常不会直接导致核心业务中断。",
+      "impact_after_72h": "长期服务不可用及声誉风险\nAI 客服连续三天不可用，可能造成大量咨询需求积压、人工客服负担显著增加，以及用户满意度下降。若发生在新品发布或营销活动期间，还可能影响产品推荐效果、潜在销售转化及品牌声誉。核心交易系统原则上仍可独立运行。",
+      "recovery_objectives_h": {
+        "rto": 8,
+        "rpo": 24
+      },
+      "info_rights_severity": 1,
+      "info_public_severity": 0,
+      "info_national_severity": 0,
+      "service_rights_severity": 1,
+      "service_public_severity": 0,
+      "service_national_severity": 0,
+      "involves_transactions": "否",
+      "interconnected_system_level": "1 级"
+    },
+    "notes": {
+      "security_responsible_entity": "AAA Software",
+      "info_rights_severity": "系统不涉及核心业务流程，主要作为辅助用途。不涉及个人敏感信息，不涉及重要信息，不涉及核心信息",
+      "info_public_severity": "系统不涉及核心业务流程，主要作为辅助用途。不涉及个人敏感信息，不涉及重要信息，不涉及核心信息",
+      "info_national_severity": "系统不涉及核心业务流程，主要作为辅助用途。不涉及个人敏感信息，不涉及重要信息，不涉及核心信息",
+      "service_rights_severity": "系统不涉及核心业务流程，主要作为辅助用途。不涉及个人敏感信息，不涉及重要信息，不涉及核心信息",
+      "service_public_severity": "系统不涉及核心业务流程，主要作为辅助用途。不涉及个人敏感信息，不涉及重要信息，不涉及核心信息",
+      "service_national_severity": "系统不涉及核心业务流程，主要作为辅助用途。不涉及个人敏感信息，不涉及重要信息，不涉及核心信息"
+    },
+    "department_contacts": {
+      "零售运营": "Alice",
+      "会员与客户服务": "Bob",
+      "品牌与市场营销": "Eve"
+    },
+    "frameworks": [
+      "MLPS_LEVEL_2"
+    ]
+  }
+}

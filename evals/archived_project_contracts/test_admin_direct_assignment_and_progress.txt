@@ -1,0 +1,10 @@
+def test_admin_direct_assignment_and_progress(owner):
+    _, admin, pid, users, sid = project_setup(owner)
+    detail = admin.get(f'/api/v1/systems/{sid}').json()
+    assert set(detail['permissions']) == {'read', 'edit', 'review', 'manage'}
+    assert sid in {s['id'] for s in admin.get('/api/v1/systems').json()}
+    body = {'project_id': pid, 'operator_id': users['operator'][0],
+            'reviewer_ids': [users['reviewer'][0]], 'version': detail['system']['version']}
+    assert admin.put(f'/api/v1/systems/{sid}/assignments', json=body).status_code == 200
+    assert admin.put(f'/api/v1/systems/{sid}/assignments', json=body).status_code == 409
+    assert admin.post('/api/v1/systems', json={**body, 'name': 'Admin project task'}).status_code == 200

@@ -1,0 +1,31 @@
+def test_upload_apply_publication_and_tenant_boundary(owner):
+    app, client = owner
+    response = client.post('/api/v1/library/imports', files={'file': ('controls.xlsx', sample())})
+    assert response.status_code == 200, response.text
+    batch = response.json()
+    assert len(batch['changes']) == 5 and not batch['errors']
+    assert batch['warnings']
+    assert client.get('/api/v1/library').json()['controls'] == []
+    with TestClient(app) as other:
+        register(other, 'labeled-other@example.test')
+        assert other.post(f'/api/v1/library/imports/{batch["id"]}/apply').status_code == 404
+    applied = client.post(f'/api/v1/library/imports/{batch["id"]}/apply')
+    assert applied.status_code == 200, applied.text
+    state = applied.json()
+    assert len(state['controls']) == 5
+    assert any(d['code'] == 'IAM' for d in state['config']['domains'])
+    assert client.post(f'/api/v1/library/imports/{batch["id"]}/apply').json() == state
+    assert client.post('/api/v1/library/publish', json={'version': state['version']}).status_code == 422
+    released = client.post('/api/v1/library/publish', json={'version': state['version'], 'publication_mode': 'direct'})
+    assert released.status_code == 200, released.text
+    assert len(client.get('/api/v1/library/history').json()[0]['controls']) == 5
+
+
+def test_stale_import_cannot_replace_new_config(owner):
+    _, client = owner
+    batch = client.post('/api/v1/library/imports', files={'file': ('controls.xlsx', sample())}).json()
+    state = client.get('/api/v1/library').json()
+    response = client.put('/api/v1/library/config', json={'version': state['version'], 'config': state['config']})
+    assert response.status_code == 200, response.text
+    assert client.post(f'/api/v1/library/imports/{batch["id"]}/apply').status_code == 409
+    assert client.get('/api/v1/library').json()['controls'] == []

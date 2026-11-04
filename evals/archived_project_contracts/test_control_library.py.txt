@@ -1,0 +1,226 @@
+def test_bulk_delete_is_atomic_scoped_and_preserves_published_history(owner):
+    app, client = owner
+    add(client, control('DELETE-A'))
+    add(client, control('DELETE-B'))
+    publish(client)
+    before = client.get('/api/v1/library').json()
+    history = client.get('/api/v1/library/history').json()
+    ids = [c['control_id'] for c in before['controls']]
+    body = {'version': before['version'], 'control_ids': ids, 'reason': 'Replace imported draft'}
+    endpoint = '/api/v1/library/controls/bulk-delete'
+    for changes, status in [({'reason': ' '}, 422), ({'control_ids': ids + ['missing']}, 404),
+                            ({'control_ids': ids + ids}, 422), ({'version': -1}, 409)]:
+        assert client.post(endpoint, json={**body, **changes}).status_code == status
+        assert client.get('/api/v1/library').json() == before
+    with TestClient(app) as other:
+        register(other, 'bulk-delete-other@example.test')
+        assert other.post(endpoint, json={**body, 'version': 0}).status_code == 404
+    headers = {'Idempotency-Key': 'bulk-delete-once'}
+    result = client.post(endpoint, json=body, headers=headers)
+    assert result.status_code == 200, result.text
+    assert result.json()['controls'] == []
+    assert result.json()['version'] == before['version'] + 1
+    assert result.json()['published_id'] == before['published_id']
+    assert client.post(endpoint, json=body, headers=headers).json() == result.json()
+    assert client.get('/api/v1/library/history').json() == history
+    from sqlalchemy import select
+    from app.db import AdminAudit
+    with app.state.sessions() as db:
+        audit = db.scalar(select(AdminAudit).where(AdminAudit.action == 'control_library.deleted_controls'))
+        assert audit.detail['controls'] == before['controls']
+        assert audit.detail['reason'] == body['reason']
+
+
+def test_bulk_delete_requires_administrator(owner):
+    app, client = owner
+    state = add(client, control())
+    from app.db import AccountPolicy
+    user_id = client.get('/api/v1/auth/session').json()['user']['id']
+    with app.state.sessions() as db:
+        policy = db.get(AccountPolicy, user_id)
+        if policy:
+            policy.admin = False
+        else:
+            db.add(AccountPolicy(user_id=user_id, admin=False))
+        db.commit()
+    assert client.post('/api/v1/library/controls/bulk-delete', json={
+        'version': state['version'], 'control_ids': [state['controls'][0]['control_id']], 'reason': 'Delete',
+    }).status_code == 403
+    assert client.get('/api/v1/library').json()['controls'] == state['controls']
+
+
+def test_library_publication_versioning_and_cross_organization(owner):
+    app, client = owner
+    state = add(client, control())
+    first = publish(client)
+    saved = client.get('/api/v1/library').json()
+    item = saved['controls'][0]
+    old_id = item['control_id']
+    item['translations']['zh']['description'] = 'New revision'
+    item['change_reason'] = 'Review update'
+    response = client.post('/api/v1/library/controls', json={'version': state['version'], 'operation': 'update', 'control': item})
+    assert response.status_code == 409
+    response = client.post('/api/v1/library/controls', json={'version': saved['version'], 'operation': 'update', 'control': item})
+    assert response.status_code == 200, response.text
+    second = publish(client)
+    assert second['catalog_id'] != first['catalog_id']
+    history = client.get('/api/v1/library/history').json()
+    assert history[0]['config'] == saved['config']
+    assert history[0]['controls'][0]['control_id'] == old_id
+    assert history[1]['controls'][0]['translations']['zh']['description'] == '控制原文'
+    with TestClient(app) as other:
+        register(other, 'other-library@example.test')
+        assert other.get('/api/v1/library').json()['controls'] == []
+        assert other.post('/api/v1/library/controls', json={'version': 0, 'operation': 'update', 'control': item}).status_code == 409
+
+
+def test_import_preview_conflict_atomicity_and_idempotent_apply(owner):
+    _, client = owner
+    state = add(client, control())
+    raw = client.get('/api/v1/library/export').content
+    batch = client.post('/api/v1/library/imports', files={'file': ('controls.xlsx', raw)}).json()
+    assert not batch['errors']
+    add(client, control('TEST-2'))
+    assert client.post(f"/api/v1/library/imports/{batch['id']}/apply").status_code == 409
+    assert len(client.get('/api/v1/library').json()['controls']) == 2
+    raw = client.get('/api/v1/library/export').content
+    batch = client.post('/api/v1/library/imports', files={'file': ('controls.xlsx', raw)}).json()
+    result = client.post(f"/api/v1/library/imports/{batch['id']}/apply")
+    assert result.status_code == 200, result.text
+    version = result.json()['version']
+    assert client.post(f"/api/v1/library/imports/{batch['id']}/apply").json()['version'] == version
+    assert state['version'] < version
+
+
+def test_unreviewed_mapping_cannot_publish(owner):
+    _, client = owner
+    item = control()
+    item['review_status'] = 'draft'
+    state = add(client, item)
+    assert client.post('/api/v1/library/publish', json={'version': state['version']}).status_code == 422
+
+
+@pytest.mark.parametrize('level', [2, 3])
+def test_single_mlps_sheet_upload_annotation_and_apply(owner, level):
+    _, client = owner
+    book = load_workbook(io.BytesIO(mlps_fixture()))
+    del book[f'MLPS Level {3 if level == 2 else 2}']
+    sheet = book.active
+    sheet.title = f'MLPS_level_{level}'
+    sheet['A1'] = 'Security   Domain'
+    sheet['J1'] = 'High Risk?'
+    sheet['K1'], sheet['K2'] = 'System Level', level
+    raw = io.BytesIO()
+    book.save(raw)
+    response = client.post('/api/v1/library/imports', files={'file': ('single.xlsx', raw.getvalue())})
+    assert response.status_code == 200, response.text
+    batch = response.json()
+    assert len(batch['changes']) == 2
+    assert all(c['after']['source_level'] == level for c in batch['changes'])
+    tagged = client.get(f"/api/v1/library/imports/{batch['id']}/annotated").content
+    after = load_workbook(io.BytesIO(tagged))
+    assert after[sheet.title]['K1'].value == 'System Level'
+    assert after[sheet.title]['K2'].value == level
+    assert after[sheet.title]['L1'].value == 'control_id'
+    assert len(preview(tagged, empty())['changes']) == 2
+    assert client.post(f"/api/v1/library/imports/{batch['id']}/apply").status_code == 200
+
+
+def test_download_annotation_and_error_batches_are_organization_scoped(owner):
+    app, client = owner
+    result = client.post('/api/v1/library/imports', files={'file': ('MLPS.xlsx', mlps_fixture())})
+    assert result.status_code == 200, result.text
+    batch = result.json()
+    assert batch['annotated']
+    path = f"/api/v1/library/imports/{batch['id']}/annotated"
+    assert client.get(path).status_code == 200
+    assert client.post(f"/api/v1/library/imports/{batch['id']}/apply").status_code == 200
+    # A standard export of sourced controls must not be mistaken for the source workbook.
+    raw = client.get('/api/v1/library/export').content
+    standard = client.post('/api/v1/library/imports', files={'file': ('standard.xlsx', raw)})
+    assert standard.status_code == 200, standard.text
+    assert not standard.json()['annotated']
+    with TestClient(app) as other:
+        register(other, 'isolated-annotations@example.test')
+        assert other.get(path).status_code == 404
+        assert other.get(f"/api/v1/library/imports/{batch['id']}/errors").status_code == 404
+
+
+def test_manual_create_and_publish_support_idempotent_retries(owner):
+    _, client = owner
+    body = {'version': 0, 'operation': 'create', 'control': control()}
+    headers = {'Idempotency-Key': 'create-key'}
+    first = client.post('/api/v1/library/controls', json=body, headers=headers)
+    assert first.status_code == 200
+    retry = client.post('/api/v1/library/controls', json=body, headers=headers)
+    assert retry.json() == first.json()
+    body['control']['control_code'] = 'CHANGED'
+    assert client.post('/api/v1/library/controls', json=body, headers=headers).status_code == 409
+    body = {'version': first.json()['version']}
+    headers = {'Idempotency-Key': 'publish-key'}
+    first = client.post('/api/v1/library/publish', json=body, headers=headers)
+    assert first.status_code == 200, first.text
+    assert client.post('/api/v1/library/publish', json=body, headers=headers).json() == first.json()
+
+
+def test_dictionary_tampering_and_nonadministrator_edit_are_rejected(owner):
+    app, client = owner
+    state = add(client, control())
+    book = load_workbook(io.BytesIO(client.get('/api/v1/library/export').content))
+    book['Dictionary']['B2'] = 'UNPUBLISHED-DOMAIN'
+    output = io.BytesIO()
+    book.save(output)
+    result = client.post('/api/v1/library/imports', files={'file': ('tampered.xlsx', output.getvalue())})
+    assert result.status_code == 422
+    assert client.get('/api/v1/library').json()['version'] == state['version']
+    from app.db import AccountPolicy
+    user_id = client.get('/api/v1/auth/session').json()['user']['id']
+    with app.state.sessions() as db:
+        policy = db.get(AccountPolicy, user_id)
+        if policy:
+            policy.admin = False
+        else:
+            db.add(AccountPolicy(user_id=user_id, admin=False))
+        db.commit()
+    assert client.get('/api/v1/library').json()['can_edit'] is False
+    assert client.post('/api/v1/library/controls', json={'version': state['version'], 'operation': 'create', 'control': control('FORBIDDEN')}).status_code == 403
+
+
+def test_direct_publication_preserves_review_state_and_records_mode(owner):
+    from sqlalchemy import select
+    from app.db import AdminAudit
+    app, client = owner
+    item = control()
+    item['review_status'] = 'draft'
+    draft = add(client, item)
+    body = {'version': draft['version'], 'publication_mode': 'direct'}
+    headers = {'Idempotency-Key': 'direct-publication'}
+    response = client.post('/api/v1/library/publish', json=body, headers=headers)
+    assert response.status_code == 200, response.text
+    assert response.json()['state']['controls'][0]['review_status'] == 'draft'
+    assert client.post('/api/v1/library/publish', json=body, headers=headers).json() == response.json()
+    history = client.get('/api/v1/library/history').json()
+    assert len(history) == 1
+    assert history[0]['publication_mode'] == 'direct'
+    assert history[0]['controls'][0]['source_ref'] == item['source_ref']
+    assert history[0]['controls'][0]['review_status'] == 'draft'
+    with app.state.sessions() as db:
+        audit = db.scalar(select(AdminAudit).where(AdminAudit.action == 'control_library.published'))
+        assert audit.detail['publication_mode'] == 'direct'
+        assert audit.detail['unreviewed_control_ids'] == [draft['controls'][0]['control_id']]
+    assert client.post('/api/v1/library/publish', json=body).status_code == 409
+
+
+def test_direct_publication_keeps_validation_and_admin_boundary(owner):
+    from app.db import AccountPolicy
+    app, client = owner
+    assert client.post('/api/v1/library/publish', json={'version': 0, 'publication_mode': 'direct'}).status_code == 422
+    state = add(client, control())
+    for mode in ['typo', True, None, []]:
+        assert client.post('/api/v1/library/publish', json={'version': state['version'], 'publication_mode': mode}).status_code == 422
+    uid = client.get('/api/v1/auth/session').json()['user']['id']
+    with app.state.sessions() as db:
+        db.add(AccountPolicy(user_id=uid, admin=False, active=True))
+        db.commit()
+    assert client.post('/api/v1/library/publish', json={'version': state['version'], 'publication_mode': 'direct'}).status_code == 403
+    assert client.get('/api/v1/library/history').json() == []

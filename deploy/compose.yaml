@@ -1,0 +1,53 @@
+name: scope-assessment
+x-application: &application
+  image: scope-assessment:local
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile
+  env_file: ${SYSEVAL_ENV_FILE:-../.env}
+  environment:
+    SYSEVAL_EMBEDDED_WORKER: "false"
+    SYSEVAL_AUTO_CREATE: "false"
+  restart: unless-stopped
+services:
+  db:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: syseval
+      POSTGRES_DB: syseval
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the application .env}
+    volumes:
+      - assessment-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U syseval -d syseval"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+  migrate:
+    <<: *application
+    command: ["alembic", "-c", "backend/alembic.ini", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    <<: *application
+    ports:
+      - "127.0.0.1:8080:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  worker:
+    <<: *application
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+volumes:
+  assessment-db:
