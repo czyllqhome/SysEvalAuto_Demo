@@ -12,7 +12,7 @@ from .domain import DomainError, digest
 DEFAULT = Path(__file__).with_name('templates') / 'prd.md'
 SLOTS = ['name', 'document_info', 'summary', 'roles', 'scope', 'workflow', 'business_requirements',
          'interaction', 'data_and_integrations', 'security_requirements', 'traceability', 'constraints',
-         'questions', 'review', 'ai_scope']
+         'questions', 'review', 'ai_scope', 'questionnaire_facts', 'acceptance_criteria', 'network_topology']
 
 
 def snapshot(db, org_id):
@@ -87,15 +87,80 @@ def render(data, source, language, pinned):
         questions.append(label)
         return t('待确认', 'To confirm') + f' (Q-{len(questions):03})'
     def value(key, label):
-        return ctx.get(key) or missing(label)
+        return ctx.get(key) or ''
+    from .mlps_intake import QUESTIONS, visible
+    import json
+    headings = json.loads((DEFAULT.parent.parent / 'data/prd_fact_headings.json').read_text(encoding='utf-8'))
+    answers = source.get('classification', {}).get('answers', {})
+    groups = {key: [] for key in ('scope', 'roles', 'workflow', 'functions', 'data', 'security', 'acceptance', 'release')}
+    def category(key):
+        if key in ('system_owner', 'org_name', 'security_responsible_entity', 'user_types'):
+            return 'roles'
+        if key in ('system_scenarios', 'involves_transactions', 'available_workaround'):
+            return 'workflow'
+        if key == 'system_functions':
+            return 'functions'
+        if key == 'deployment_model':
+            return 'security'
+        if key in ('recovery_objectives_h', 'impact_after_4h', 'impact_after_24h', 'impact_after_72h'):
+            return 'acceptance'
+        if key in ('system_name', 'system_purpose', 'system_business_type', 'target_type',
+                   'independent_business', 'service_geography', 'public_service_nature', 'critical_business'):
+            return 'scope'
+        if key in ('system_interaction', 'system_interfaces_description', 'external_connections_description',
+                   'system_dependencies') or key.startswith(('data_', 'personal_', 'sensitive_', 'important_', 'core_', 'pi_', 'cross_border', 'registered_')):
+            return 'data'
+        return 'security'
+    def answer_text(answer, question):
+        if answer is None:
+            return ''
+        if isinstance(answer, list):
+            return ' / '.join(answer_text(item, question) for item in answer)
+        if isinstance(answer, dict):
+            return json.dumps(answer, ensure_ascii=False)
+        if not zh and answer in question.get('options', []):
+            return question.get('options_en', question['options'])[question['options'].index(answer)]
+        return str(answer)
+    for question in QUESTIONS:
+        key = question['key']
+        if key in ('system_interaction', 'independent_business', 'public_service_nature', 'system_functions', 'interconnected_system_level', 'external_dependency_impact', 'safety_impact') or question['kind'] == 'severity' or not visible(question, answers):
+            continue
+        if question['kind'] == 'severity' and answers.get(key) == 0:
+            continue
+        rendered = answer_text(answers.get(key), question)
+        note = source.get('classification', {}).get('notes', {}).get(key, '')
+        if note:
+            rendered += (' / ' if rendered else '') + str(note)
+        if key == 'security_responsible_entity':
+            rendered = str(note) if answers.get(key) == '是' else ''
+        if key == 'system_owner':
+            contacts = source.get('classification', {}).get('department_contacts', {})
+            selected = answers.get(key, [])
+            rendered += ''.join(f' / {department}: {contact}' for department, contact in contacts.items()
+                                if department in selected and contact)
+        title = headings.get(key, ['', ''])[0 if zh else 1]
+        groups[category(key)].append(f"<!-- questionnaire:{question['id']} classification.answers.{key} -->\n" +
+                                     f"#### {title}\n\n{rendered}")
+    def table(rows):
+        return '\n\n'.join(rows)
+    questionnaire_facts = '\n\n'.join(table(rows) for rows in groups.values() if rows)
     controls = {c['id']: c for c in source['controls']}
     def requirements(security):
         lines = []
-        for r in data['requirements']:
+        rows = data['requirements']
+        def domains(requirement):
+            return ' / '.join(sorted({str(controls[c].get('metadata', {}).get('source', {}).get('languages', {}).get('zh', {}).get('fields', {}).get('security_domain') or controls[c].get('domain') or t('其他', 'Other')) for c in requirement['source_control_ids']}))
+        if security:
+            rows = sorted(rows, key=domains)
+        previous_domain = None
+        for r in rows:
             if bool(r['source_control_ids']) != security:
                 continue
+            if security and domains(r) != previous_domain:
+                previous_domain = domains(r)
+                lines += ['### ' + previous_domain, '']
             refs = [controls[c]['code'] + ' [' + c + ']' for c in r['source_control_ids']]
-            lines += [f"### {r['id']} · {r['title']}", '', r['description'], '',
+            lines += [f"{'####' if security else '###'} {r['id']} · {r['title']}", '', r['description'], '',
                       t('优先级', 'Priority') + ': ' + r['priority'],
                       t('来源', 'Sources') + ': ' + ', '.join(r['source_context_item_ids'] + refs),
                       t('依赖', 'Dependencies') + ': ' + ', '.join(r['dependencies']), '']
@@ -107,7 +172,7 @@ def render(data, source, language, pinned):
                 original = sources.get(language) or sources.get('zh')
                 if original:
                     lines += ['', t('原始控制要求', 'Original control requirement') + ': ' + original['fields']['control_requirement'],
-                              t('测评步骤', 'Assessment procedure') + ': ' + original['fields']['assessment_procedure'],
+                              *( [t('测评步骤', 'Assessment procedure') + ': ' + original['fields']['assessment_procedure']] if original['fields'].get('assessment_procedure') else []),
                               f"{original['filename']} · row {original['row']} · {meta.get('source_ref', '')}"]
                 elif sources:
                     lines += ['', missing(t('该语言控制原文缺失：', 'Control source missing in this language: ') + control['code'])]
@@ -118,22 +183,28 @@ def render(data, source, language, pinned):
         trace.append('| ' + ' | '.join(map(cell, [r['id'], ', '.join(r['source_context_item_ids']),
                      ', '.join(controls[c]['code'] for c in r['source_control_ids']),
                      ', '.join(f"AC-{r['id']}-{i + 1}" for i in range(len(r['acceptance_criteria'])))])) + ' |')
-    slots = {'name': source['name'], 'document_info': '\n\n'.join([
+    slots = {'questionnaire_facts': questionnaire_facts, 'name': source['name'], 'document_info': '\n\n'.join([
         t('状态：待评审；不代表已批准或已验收。', 'Status: awaiting review; not approved or accepted.'),
         t('生成方式：', 'Generation mode: ') + {'local': t('本地规则草稿，需人工细化', 'Local rule-based draft; needs refinement'),
             'openrouter': t('模型生成草稿，需人工评审', 'Model-generated draft; needs review')}.get(source.get('generation_mode'), t('人工修订', 'Manual revision')),
         f"Revision: {source['revision']} · Context: {source['context_revision_id']}",
         f"Level: {source['classification']['effective_level']} · Catalog: {source['classification'].get('catalog_id', '')}",
         f"Template: {pinned['version']} · SHA-256: {pinned['hash']}"]),
-        'summary': data['summary'], 'roles': '\n\n'.join([', '.join(ctx['departments']), ', '.join(ctx['roles']), ctx['owner_role']]),
+        'summary': data['summary'], 'roles': '',
         'scope': value('scope', 'Scope'), 'workflow': value('workflow', 'Workflow and business object states'),
         'business_requirements': requirements(False), 'security_requirements': requirements(True),
-        'interaction': missing(t('页面、交互状态与原型需人工细化', 'Pages, interaction states and prototypes need review')),
+        'interaction': '',
         'data_and_integrations': value('data_notes', 'Data requirements') + '\n\n' + value('integrations', 'Integration contracts'),
         'traceability': '\n'.join(trace), 'constraints': value('constraints', 'Delivery and release constraints'),
-        'ai_scope': missing(t('AI 能力、知识、工具与评测边界；不适用时请说明理由', 'AI, knowledge, tool and evaluation scope; explain if not applicable')),
+        'ai_scope': '',
         'review': t('业务功能和已纳入控制覆盖校验已通过。可测性、权限异常、上线条件及待确认项仍需人工评审。',
                     'Business function and included-control coverage validated. Measurability, permission failures, release conditions and open questions need human review.')}
+    from .topology import markdown as topology_markdown
+    slots['network_topology'] = topology_markdown(source.get('network_topology', []), language)
+    slots['acceptance_criteria'] = '\n'.join(
+        f"- AC-{r['id']}-{i + 1}: {criterion}"
+        for r in data['requirements'] for i, criterion in enumerate(r['acceptance_criteria']))
+    slots.update({f'{key}_questions': table(rows) for key, rows in groups.items()})
     text = pinned['template']['content']
     # A/B are reference instructions, not document content, in the supplied reference format.
     if '\n## 0 ' in text and '\n## A ' in text:
@@ -149,8 +220,17 @@ def render(data, source, language, pinned):
     text = re.sub(r'\{\{([^{}]+)\}\}', replace, text)
     # Coverage cannot be removed by deleting layout slots.
     for key in SLOTS:
-        if key not in used and key not in ('name', 'questions'):
+        if key not in used and key not in ('name', 'questions', 'summary', 'scope', 'workflow', 'data_and_integrations', 'network_topology') and not (
+                key == 'questionnaire_facts' and all(f'{group}_questions' in used for group in groups)):
             text += f'\n\n## {key}\n\n{slots[key]}'
+    if 'network_topology' not in used and slots['network_topology']:
+        architecture = re.search(r'^## [^\n]*(?:系统开发架构|System development architecture)[^\n]*\n', text, re.MULTILINE | re.IGNORECASE)
+        if architecture:
+            following = re.search(r'^## ', text[architecture.end():], re.MULTILINE)
+            index = architecture.end() + following.start() if following else len(text)
+            text = text[:index] + '\n' + slots['network_topology'] + '\n\n' + text[index:]
+        else:
+            text += '\n\n## ' + t('系统开发架构', 'System development architecture') + '\n\n' + slots['network_topology']
     register = '\n'.join([f'- ASM-{i + 1:03}: {s}' for i, s in enumerate(data['assumptions'])] +
                          [f'- Q-{i + 1:03}: {s}' for i, s in enumerate(questions + data['open_questions'])])
     if '%%QUESTION_REGISTER%%' in text:

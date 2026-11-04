@@ -1,43 +1,54 @@
-# {{name}} — 系统需求与验收规格 / System requirements and acceptance specification
+# {{name}} — PRD 初稿 / PRD draft
 
-## 1 文档基线 / Document baseline
 {{document_info}}
 
-## 2 业务目标与成功标准 / Business objectives and success criteria
-{{summary}}
+## 1 开发范围 / Development scope
 
-## 3 责任人与使用角色 / Accountable owner and user roles
+
+{{scope_questions}}
+
+## 2 角色权限 / Roles and permissions
 {{roles}}
 
-## 4 系统边界与范围 / System boundary and scope
-{{scope}}
+{{roles_questions}}
 
-## 5 业务流程、状态与异常 / Workflows, states and exceptions
-{{workflow}}
+## 3 业务流程 / Business workflows
 
-## 6 功能需求与逐项验收 / Functional requirements and acceptance criteria
+{{workflow_questions}}
+
+## 4 功能需求 / Functional requirements
+{{functions_questions}}
+
 {{business_requirements}}
 
-## 7 页面、交互与权限边界 / Screens, interactions and authorization boundaries
 {{interaction}}
+{{ai_scope}}
 
-## 8 数据生命周期与接口契约 / Data lifecycle and interface contracts
-{{data_and_integrations}}
+## 5 数据接口 / Data and interfaces
 
-## 9 MLPS 安全要求与测评证据 / MLPS security requirements and assessment evidence
+{{data_questions}}
+
+## 6 系统开发架构 / System development architecture
+{{security_questions}}
+
+{{network_topology}}
+
+## 7 安全开发需求 / Security development requirements
 {{security_requirements}}
 
-## 10 来源与验收追踪矩阵 / Source and acceptance traceability
+## 8 SLA
+{{acceptance_questions}}
+
+{{acceptance_criteria}}
+
 {{traceability}}
 
-## 11 交付、部署、回退与运维 / Delivery, deployment, rollback and operations
-{{constraints}}
-
-## 12 假设、依赖与待决事项 / Assumptions, dependencies and open decisions
-{{questions}}
-
-## 13 评审与供应商承诺 / Review and supplier commitments
 {{review}}
 
-## 14 AI 功能适用性 / Applicability of AI capabilities
-{{ai_scope}}
+## 9 上线计划 / Release plan
+{{release_questions}}
+
+{{constraints}}
+
+### 假设与待确认事项 / Assumptions and open questions
+{{questions}}

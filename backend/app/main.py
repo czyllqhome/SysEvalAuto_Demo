@@ -297,6 +297,8 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
             statement = statement.where(System.id.in_(select(SupplierRound.system_id).where(SupplierRound.supplier_org_id == user.org_id)))
         result = []
         for system in db.scalars(statement.order_by(System.updated_at.desc())):
+            if system.draft.get('deleted_at'):
+                continue
             if user.role == "vendor" and not access.supplier_project_access(db, user, system):
                 continue
             if user.role != 'vendor' and 'read' not in access.capabilities(db, user, system):
@@ -310,7 +312,7 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
                 if round_.id != system.round_id:
                     status = "ROUND_CLOSED"
             result.append({"id": system.id, "name": system.name, "status": status, "revision": system.revision,
-                           "level": classification.get("effective_level"), "updated_at": system.updated_at,
+                           "level": classification.get("effective_level"), "updated_at": system.updated_at, "version": system.version,
                            "department": ", ".join(context.get("departments", [])),
                            **profile_view(db, system)})
         return result
@@ -343,6 +345,23 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
     @app.get("/api/v1/systems/{system_id}")
     def get_system(system_id: str, user=Depends(current), db=Depends(get_db)):
         return service.system_view(db, service.system_for(db, user, system_id), user)
+
+    @app.delete('/api/v1/systems/{system_id}')
+    def delete_assessment(system_id: str, body: dict, user=Depends(current), db=Depends(get_db)):
+        access.require_admin(db, user)
+        system = service.system_for(db, user, system_id, write=True)
+        if system.org_id != user.org_id:
+            raise DomainError('NOT_FOUND', 404)
+        if body.get('version') != system.version:
+            raise DomainError('VERSION_CONFLICT', 409)
+        system.draft = {**system.draft, 'deleted_at': time.time(), 'deleted_by': user.id}
+        system.version += 1
+        system.revision += 1
+        system.updated_at = time.time()
+        db.add(Audit(system_id=system.id, actor_id=user.id, action='assessment.deleted'))
+        access.audit(db, user, 'assessment.deleted', {'system_id': system.id, 'name': system.name})
+        db.commit()
+        return {'deleted': True, 'id': system.id}
 
     @app.put('/api/v1/systems/{system_id}/name')
     def rename_system(system_id: str, body: dict, request: Request, user=Depends(current), db=Depends(get_db)):
@@ -529,7 +548,13 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
     def start_job(system_id: str, body: dict, request: Request, user=Depends(current), db=Depends(get_db)):
         system = service.system_for(db, user, system_id, write=True)
         def operation():
-            job = service.schedule(db, system, body.get("kind"), body.get("mode", "local"), body.get("language", "zh"),
+            kind = body.get('kind')
+            if kind == 'function_expansion':
+                function_id = body.get('function_id')
+                if not isinstance(function_id, str) or not function_id:
+                    raise DomainError('INVALID_FIELDS')
+                kind = 'function_expansion:' + digest(function_id)[:16]
+            job = service.schedule(db, system, kind, body.get("mode", "local"), body.get("language", "zh"),
                                    reparse=body.get('reparse') is True)
             if job.kind == 'prd_import_extraction' and 'import_actor' not in job.usage:
                 job.usage = {**job.usage, 'import_actor': user.id,
@@ -550,7 +575,7 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
                 raise DomainError("NOT_FOUND", 404)
         return {"id": job.id, "state": job.state, "kind": job.kind, "mode": job.mode,
                 "error": job.error, "attempts": job.attempts, "usage": {k: v for k, v in job.usage.items() if k != "ai_config"},
-                "output": job.output if job.kind.startswith('narrative_refinement:') and job.state == 'succeeded' else None}
+                "output": job.output if job.kind.startswith(('narrative_refinement:', 'function_expansion:')) and job.state == 'succeeded' else None}
 
     @app.post("/api/v1/systems/{system_id}/prd-withdrawal")
     def withdraw_prd(system_id: str, body: dict, request: Request, user=Depends(current), db=Depends(get_db)):
@@ -583,6 +608,8 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
             data = validate_prd(body.get("data", {}), system.context, source["controls"])
             from . import prd_templates
             pinned = prd_templates.recorded(db, original)
+            from .topology import embed
+            source = {**source, 'network_topology': embed(db, system.id, source.get('network_topology', []))}
             markdown = render_prd(data, source, original.language, pinned)
             edited = Prd(system_id=system.id, revision=system.revision, language=original.language,
                          mode="manual", data=data, markdown=markdown,
@@ -650,7 +677,8 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
                                     supplier_org_id=org_id, email=email, expires_at=time.time() + 7 * 86400)
             db.add(invitation)
             round_ = SupplierRound(system_id=system.id, supplier_org_id=org_id, prd_id=prd.id,
-                                   snapshot={"context": system.context, "classification": system.classification,
+                                   snapshot={"controls": [s.snapshot for s in service.selections(db, system, included_only=True)],
+                                             "context": system.context, "classification": system.classification,
                                              "context_revision_id": system.context_revision_id})
             db.add(round_)
             db.flush()
@@ -816,6 +844,12 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
     register_routes(app, current, get_db, password_hash, password_matches)
     from .library_routes import register_routes as register_library_routes
     register_library_routes(app, current, get_db, command)
+
+    from .six_field_controls import register_routes as register_source_routes
+    register_source_routes(app, current, get_db)
+
+    from .topology import register_routes as register_topology_routes
+    register_topology_routes(app, current, get_db)
 
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 

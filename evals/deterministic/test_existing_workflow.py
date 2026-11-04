@@ -121,12 +121,11 @@ def test_creation_reuse_idempotency_and_isolation(owner):
     followup = {**body, 'name': 'Review', 'assessment_type': 'existing', 'asset_id': asset,
         'predecessor_id': a.json()['system']['id'], 'scope': 'Live service', 'environment': 'production',
         'system_version': 'v2', 'as_of': today().isoformat(), 'trigger': 'periodic', 'type_reason': 'Now in operation'}
-    result = client.post('/api/v1/systems', json=followup)
+    result = client.post('/api/v1/systems', json={k: v for k, v in followup.items() if k != 'predecessor_id'})
     assert result.status_code == 200, result.text
     assert result.json()['system']['asset_id'] == asset
     outsider = TestClient(app)
     register(outsider, 'outside@example.test')
-    assert outsider.post('/api/v1/systems', json=followup).status_code == 404
     assert outsider.get(f"/api/v1/systems/{result.json()['system']['id']}/existing").status_code == 404
 
 

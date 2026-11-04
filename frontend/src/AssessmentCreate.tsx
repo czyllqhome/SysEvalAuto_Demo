@@ -9,8 +9,8 @@ import type { SystemDetail } from './types'
 export type AssessmentKind = 'new' | 'existing'
 export interface AssessmentOptions { projects: { id: string; name: string; purpose: AssessmentKind }[]; assets: { id: string; name: string; project_id: string }[] }
 
-export default function AssessmentCreate({ initialKind = 'new', predecessor, onCreated }: {
-  initialKind?: AssessmentKind; predecessor?: SystemDetail; onCreated?: () => void;
+export default function AssessmentCreate({ initialKind = 'new', onCreated }: {
+  initialKind?: AssessmentKind; onCreated?: () => void;
 }) {
   const { t, error: translate } = useLocale()
   const client = useQueryClient(), navigate = useNavigate()
@@ -24,7 +24,6 @@ export default function AssessmentCreate({ initialKind = 'new', predecessor, onC
     try {
       const result = await api<SystemDetail>('/systems', { method: 'POST', key, body: {
         ...values, assessment_type: kind,
-        predecessor_id: predecessor?.system.id,
       } })
       client.setQueryData(['system', result.system.id], result)
       await client.invalidateQueries({ queryKey: ['systems'] }); await client.invalidateQueries({ queryKey: ['assessment-options'] })
@@ -33,7 +32,7 @@ export default function AssessmentCreate({ initialKind = 'new', predecessor, onC
   }}>
     {(error || query.error) && <Notice error>{error || t('创建选项加载失败', 'Could not load creation options')}</Notice>}
     <label>{t('系统类型', 'System type')}<select value={kind} onChange={e => setKind(e.target.value as AssessmentKind)}><option value="new">{t('待开发系统', 'System to be developed')}</option><option value="existing">{t('现有系统', 'Existing system')}</option></select></label>
-    <label>{t('待评估系统名称', 'System name to assess')}<input required name="name" maxLength={200} defaultValue={predecessor?.system.name ?? ''} /></label>
+    <label>{t('待评估系统名称', 'System name to assess')}<input required name="name" maxLength={200} /></label>
     {kind === 'existing' && <>
       <label>{t('评估范围', 'Assessment scope')}<textarea name="scope" required maxLength={8000} /></label>
       <label>{t('评估基准日期', 'Assessment reference date')}<input name="as_of" type="date" required /></label>

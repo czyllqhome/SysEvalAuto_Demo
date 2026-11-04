@@ -1,6 +1,6 @@
+import GradeResultPanel from './GradeResultPanel'
 import { DeliveryStart } from './DeliveryWorkspace'
 import ExistingAssessment from './ExistingAssessment'
-import AssessmentCreate from './AssessmentCreate'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
@@ -29,7 +29,6 @@ export default function Workspace() {
   const vendor = user.role === 'vendor'
   const navigate = useNavigate()
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [followup, setFollowup] = useState(false)
   const query = useQuery({ queryKey: ['system', id], queryFn: () => api<SystemDetail>(`/systems/${id}`),
     refetchInterval: query => ['queued', 'running'].includes(query.state.data?.job?.state ?? '') ? 900 :
       ['VENDOR_FILLING', 'ANALYZING', 'FINAL_CONFIRMATION', 'REMEDIATING'].includes(query.state.data?.system.status ?? '') ? 2500 : false })
@@ -42,18 +41,19 @@ export default function Workspace() {
   if (!vendor && tab === 'discovery') return <Navigate to={`/systems/${id}/${system.classification.effective_level ? 'brief' : 'classification'}`} replace />
   const active = tab ?? stageTab(system.status, vendor, hasDescription)
   const steps = [
-    ['classification', t('系统定级', 'System grading')], ['brief', t('审查应用说明', 'Review brief')],
+    ['classification', t('系统定级', 'System grading')], ['grade-result', t('定级结果', 'Grade result')], ['brief', t('审查应用说明', 'Review brief')],
     ['controls', t('控制审查', 'Controls')], ['prd', t('PRD 文档', 'PRD')], ['supplier', t('供应商', 'Supplier')],
     ['impact', t('影响评估', 'Impact')], ['agreement', t('双方确认', 'Agreement')],
     ['existing', t('现状评估与整改', 'Verification & remediation')],
   ].filter(([key]) => existing ? !['prd', 'supplier', 'impact', 'agreement'].includes(key) : key !== 'existing').filter(([key]) => !vendor || ['prd', 'supplier', 'impact', 'agreement'].includes(key))
   const available = (key: string) => key === 'existing' && !!system.context_revision_id || !vendor && (key === 'classification') ||
-    key === 'brief' && !!system.classification.effective_level || key === 'controls' && !!system.context_revision_id ||
+    key === 'grade-result' && !vendor && !!system.classification.effective_level || key === 'brief' && !!system.classification.effective_level || key === 'controls' && !!system.context_revision_id ||
     key === 'prd' && (!!system.context_revision_id || !!detail.prd) || key === 'supplier' && !!detail.prd ||
     key === 'impact' && !!detail.round || key === 'agreement' && (!!detail.report || !!detail.baseline)
   const currentStep = steps.findIndex(([key]) => key === stageTab(system.status, vendor, hasDescription))
   const panels: Record<string, React.ReactNode> = {
     existing: existing && !vendor ? <ExistingAssessment detail={detail} /> : null,
+    'grade-result': !vendor ? <GradeResultPanel detail={detail} /> : null,
     classification: !vendor ? <ClassificationPanel detail={detail} /> : null,
     brief: !vendor ? <BriefReviewPanel key={`${id}-brief`} detail={detail} /> : null,
     controls: !vendor ? <ControlsPanel detail={detail} /> : null,
@@ -81,7 +81,6 @@ export default function Workspace() {
     <JobNotice detail={detail} />{system.status === "PENDING_DEVELOPMENT" && <DeliveryStart systemId={id} version={system.version} canManage={detail.permissions?.includes("manage")} />}{!vendor && detail.permissions?.length === 1 && <Notice>{t('你具有此评估的只读权限。', 'You have read-only access to this assessment.')}</Notice>}
     <fieldset className="permission-fieldset" disabled={!vendor && !!detail.permissions && !detail.permissions.some(p => p !== 'read')}>{(steps.some(([key]) => key === active) ? panels[active] : null) ?? <Empty title={t('该步骤暂不可用', 'This step is not available yet')} />}</fieldset>
     {active === 'supplier' && detail.round?.status === 'open' && <CsvExchange key={detail.round.version} detail={detail} kind="prd" />}
-    {!vendor && detail.permissions?.includes('manage') && <Button variant="secondary" onClick={() => setFollowup(true)}>{t('创建关联后继评估', 'Create linked follow-up assessment')}</Button>}{followup && <Modal title={t('创建关联后继评估', 'Create linked follow-up assessment')} close={() => setFollowup(false)}><AssessmentCreate initialKind="existing" predecessor={detail} onCreated={() => setFollowup(false)} /></Modal>}
     {historyOpen && <Modal title={t('评估变更记录', 'Assessment history')} close={() => setHistoryOpen(false)} wide>{history.error && <Notice error>{t('无法读取记录。', 'Could not load the history.')}</Notice>}<div className="history-list">{history.data?.map(item => <div key={item.id}><span className="timeline-dot" /><div><strong>{auditLabels[item.action] ?? t('评估记录更新', 'Assessment record updated')}</strong><span className="mono muted">{new Date(item.created_at * 1000).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-GB')}</span></div><code>{item.action}</code></div>)}</div></Modal>}
   </>
 }

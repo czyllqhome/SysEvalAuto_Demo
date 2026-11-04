@@ -13,7 +13,7 @@ ROOT = Path(__file__).with_name('data') / 'mlps'
 NS = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 FIELDS = ['source', 'control_identifier', 'security_domain', 'security_control_point',
           'control_requirement', 'assessment_procedure', 'risk_level']
-FRAMEWORKS = ['MLPS_LEVEL_2', 'MLPS_LEVEL_3']
+FRAMEWORKS = ['MLPS_LEVEL_1', 'MLPS_LEVEL_2', 'MLPS_LEVEL_3']
 
 
 def read_book(path):
@@ -95,6 +95,9 @@ def dataset():
 
 
 def ensure_catalog(db, org_id):
+    from .db import SixFieldLibrary
+    if db.get(SixFieldLibrary, org_id):
+        return None
     from sqlalchemy import select
     from .db import Catalog, Control, ControlMetadata, LibraryRelease, LibraryWorkspace
     row = db.get(LibraryWorkspace, org_id)

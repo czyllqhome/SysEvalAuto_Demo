@@ -56,11 +56,11 @@ def register_routes(app, current, get_db, command):
                                  'X-Content-SHA256': row.sha256})
 
     @app.get('/api/v1/systems/{system_id}/mlps-intake')
-    def mlps_read(system_id: str, user=Depends(current), db=Depends(get_db)):
+    def mlps_read(system_id: str, latest: bool = False, user=Depends(current), db=Depends(get_db)):
         non_vendor(user)
         system = service.system_for(db, user, system_id)
         saved = system.draft.get('mlps_intake', {})
-        catalog, _, _ = screening.resolve(db, user.org_id, saved.get('catalog_id'))
+        catalog, _, _ = screening.resolve(db, user.org_id, None if latest else saved.get('catalog_id'))
         return {'questions': mlps_intake.QUESTIONS, 'saved': saved,
                 'demo_template': mlps_intake.demo_template_for_org(user.org_id),
                 'catalog_id': catalog.id if catalog else None,

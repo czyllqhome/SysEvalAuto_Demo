@@ -47,7 +47,7 @@ export function isVisible(q: Question, a: Answers) {
   if (q.key === 'core_data_details') return (a.data_categories as string[] | undefined)?.includes('核心数据') ?? false
   return true
 }
-const filled = (v: Value | undefined) => v !== undefined && v !== '' && (!Array.isArray(v) || v.length > 0)
+const filled = (v: Value | undefined) => v !== undefined && (typeof v !== 'string' || !!v.trim()) && (!Array.isArray(v) || v.length > 0)
 
 export default function MLPSIntake({ detail }: { detail: SystemDetail }) {
   const { t } = useLocale()
@@ -80,7 +80,8 @@ function Editor({ detail, settings }: { detail: SystemDetail; settings: Settings
   const sequence = useRef(0)
   const editable = settings.permissions.includes('edit')
   const locked = busy || waiting || !editable
-  const body = { scheme: 'MLPS-INTAKE/1', answers, notes, department_contacts: contacts, frameworks, catalog_id: settings.catalog_id }
+  const [catalogId, setCatalogId] = useState(settings.catalog_id)
+  const body = { scheme: 'MLPS-INTAKE/1', answers, notes, department_contacts: contacts, frameworks, catalog_id: catalogId }
   let dataQuestionNumber = 0
   const visible = settings.questions.filter(q => !q.parent_key && isVisible(q, answers)).filter(q => q.kind !== 'severity' || q.key.endsWith('_rights_severity')).map(q => q.kind === 'severity' ? { ...q, id: q.key.startsWith('info_') ? 'E09' : 'E10' } : q.id.startsWith('D') ? { ...q, id: `D${String(++dataQuestionNumber).padStart(2, '0')}` } : q)
   const answered = (q: Question) => ['data_categories', 'system_interaction'].includes(q.key) ? filled(answers[q.key]) && settings.questions.filter(child => child.parent_key === q.key && isVisible(child, answers)).every(child => filled(answers[child.key]) && !(child.key === 'personal_info_count_system' && answers[child.key] === '10,001–100,000 人')) : q.kind === 'recovery_targets' ? ['rto', 'rpo'].every(key => filled((answers[q.key] as Record<string, string | number> | undefined)?.[key])) : q.kind === 'volume_ranges' ? !!((answers[q.key] as Record<string, string> | undefined)?.records && (answers[q.key] as Record<string, string> | undefined)?.storage) : q.kind === 'severity' ? selectedImpactFields(q.key.startsWith('info_') ? 'info' : 'service', answers).length > 0 && selectedImpactFields(q.key.startsWith('info_') ? 'info' : 'service', answers).every(key => filled(answers[key])) : filled(answers[q.key])
@@ -96,10 +97,18 @@ function Editor({ detail, settings }: { detail: SystemDetail; settings: Settings
   async function save(rethrow = false) {
     try { await run(`/systems/${detail.system.id}/mlps-intake`, body, 'PUT'); client.setQueryData(['mlps-intake', detail.system.id], { ...settings, saved: body }); setDirty(false); return true } catch (cause) { if (rethrow) throw cause; return false }
   }
+  async function loadLatest() {
+    setWaiting(true); setProblem('')
+    try {
+      const latest = await api<Settings>(`/systems/${detail.system.id}/mlps-intake?latest=true`)
+      setCatalogId(latest.catalog_id); change(); setStep(0)
+    } catch (error) { setProblem(translate(error instanceof ApiError ? error.code : 'NETWORK_ERROR')) }
+    finally { setWaiting(false) }
+  }
   async function preview() {
     setWaiting(true); setProblem('')
     const seq = sequence.current
-    try { const data = await api<Result>(`/systems/${detail.system.id}/mlps-intake/preview`, { method: 'POST', body }); if (seq === sequence.current) { setResult(data); if (frameworkMode === 'auto') { setFrameworks([data.assessment.proposed_level === 3 ? 'MLPS_LEVEL_3' : 'MLPS_LEVEL_2']); setDirty(true) } return true } }
+    try { const data = await api<Result>(`/systems/${detail.system.id}/mlps-intake/preview`, { method: 'POST', body }); if (seq === sequence.current) { setResult(data); if (frameworkMode === 'auto') { setFrameworks([data.assessment.proposed_level === 1 ? 'MLPS_LEVEL_1' : data.assessment.proposed_level === 3 ? 'MLPS_LEVEL_3' : 'MLPS_LEVEL_2']); setDirty(true) } return true } }
     catch (e) { setProblem(translate(e instanceof ApiError ? e.code : 'NETWORK_ERROR')) }
     finally { setWaiting(false) }
     return false
@@ -154,7 +163,18 @@ function Editor({ detail, settings }: { detail: SystemDetail; settings: Settings
           await save(true)
           const response = await run(`/systems/${detail.system.id}/jobs`, { kind: `narrative_refinement:${q.ai_topic}`, mode: 'openrouter', language: locale })
           return response.job_id!
-        }}><textarea id={q.key} maxLength={10000} rows={7} value={String(v ?? '')} onChange={e => update(q.key, e.target.value)} placeholder={t('简单描述本题内容，再点击 AI 优化描述。', 'Write a brief answer to this question, then choose Refine with AI.')} /></NarrativeRefinement>
+        }}>{['system_functions', 'system_scenarios'].includes(q.key)
+          ? <div className="mlps-records">{String(v ?? '').split('\n').map((line, index, lines) => {
+              const isFunction = q.key === 'system_functions'
+              const itemLabel = isFunction ? t('功能', 'Function') : t('场景', 'Scenario')
+              return <div className="mlps-narrative-item" key={index}>
+                <input id={index === 0 ? q.key : undefined} aria-label={index > 0 ? `${itemLabel} ${index + 1}` : undefined} value={line}
+                  maxLength={Math.max(line.length, 10000 - String(v ?? '').length + line.length)}
+                  onChange={e => update(q.key, lines.map((item, i) => i === index ? e.target.value : item).join('\n'))} />
+                {lines.length > 1 && <Button variant="text" aria-label={`${t('移除', 'Remove')} ${itemLabel} ${index + 1}`} onClick={() => update(q.key, lines.filter((_, i) => i !== index).join('\n'))}>{t('移除', 'Remove')}</Button>}
+              </div>
+            })}<Button variant="secondary" disabled={!String(v ?? '').split('\n').slice(-1)[0]?.trim() || String(v ?? '').length >= 10000} onClick={() => update(q.key, `${v ?? ''}\n`)}>{q.key === 'system_functions' ? t('添加功能', 'Add function') : t('添加场景', 'Add scenario')}</Button></div>
+          : <textarea id={q.key} maxLength={10000} rows={7} value={String(v ?? '')} onChange={e => update(q.key, e.target.value)} placeholder={t('简单描述本题内容，再点击 AI 优化描述。', 'Write a brief answer to this question, then choose Refine with AI.')} />}</NarrativeRefinement>
         : ['org_name', 'system_name'].includes(q.key) ? <input id={q.key} value={String(v ?? '')} onChange={e => update(q.key, e.target.value)} />
         : <textarea id={q.key} rows={q.kind === 'evidence' ? 3 : 4} value={String(v ?? '')} onChange={e => update(q.key, e.target.value)} placeholder={q.kind === 'evidence' ? t('粘贴受控材料编号或链接，或上传文件。', 'Enter a controlled document ID/link, or upload a file.') : t('根据实际情况填写；未知事项请明确说明。', 'Describe the facts and identify any unknowns.')} />}
       {settings.questions.filter(child => child.parent_key === q.key && isVisible(child, answers)).map(child => field(child))}
@@ -190,7 +210,7 @@ function Editor({ detail, settings }: { detail: SystemDetail; settings: Settings
   const demoHost = document.getElementById(`assessment-demo-actions-${detail.system.id}`)
   const a = result?.assessment
   if (step === steps.length && a) return <section className="mlps-intake mlps-grade-screen">
-    {demoHost ? createPortal(demoActions, demoHost) : demoActions}
+    {demoHost ? createPortal(demoActions, demoHost) : demoActions}{editable && <Button variant="secondary" disabled={locked} onClick={() => void loadLatest()}>{t('加载最新控制库', 'Load latest controls')}</Button>}
     <div ref={sectionHeading} className="mlps-grade-anchor" />
     {(error || problem) && <Notice error>{error || problem}</Notice>}
     <MLPSGradeResult assessment={a} answers={answers} notes={notes} questions={settings.questions.map(q => ({ ...q, id: visible.find(main => main.key === q.key)?.id ?? visible.find(main => main.key === q.parent_key)?.id ?? q.id }))} frameworks={frameworks} locked={locked}
@@ -200,7 +220,7 @@ function Editor({ detail, settings }: { detail: SystemDetail; settings: Settings
       confirm={() => void run(`/systems/${detail.system.id}/classification-confirmations`, body).then(() => { client.setQueryData(['mlps-intake', detail.system.id], { ...settings, saved: body }); setDirty(false); navigate(`/systems/${detail.system.id}/brief`) }).catch(() => {})} />
   </section>
   return <section className="mlps-intake">
-    {demoHost ? createPortal(demoActions, demoHost) : demoActions}
+    {demoHost ? createPortal(demoActions, demoHost) : demoActions}{editable && <Button variant="secondary" disabled={locked} onClick={() => void loadLatest()}>{t('加载最新控制库', 'Load latest controls')}</Button>}
     <header className="mlps-header"><div><span className="eyebrow">MLPS 2.0 / INFORMATION COLLECTION</span><h2>{t('从系统事实，到有依据的初步定级', 'From system facts to evidence-based grading')}</h2><p>{t('面向 Amer Sports 品牌、门店、电商与供应链场景，按五个主题核实事实和业务影响。', 'For Amer Sports brand, store, e-commerce and supply-chain scenarios: verify facts and impacts across five topics.')}</p></div></header>
     {settings.legacy && <Notice>{t('旧版分级分类答案已保留。请按新问卷重新填报，保存变更会产生修订并使后续结果待重新确认。', 'Legacy answers are preserved. Complete this new questionnaire; saving changes creates a revision and requires downstream reconfirmation.')}</Notice>}
     {(error || problem) && <Notice error>{error || problem}</Notice>}

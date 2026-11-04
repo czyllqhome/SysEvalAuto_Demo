@@ -78,7 +78,7 @@ def supplier_project_access(db, user, system):
 
 
 def capabilities(db, user, system):
-    if user.role == 'vendor' or system.org_id != user.org_id:
+    if system.draft.get('deleted_at') or user.role == 'vendor' or system.org_id != user.org_id:
         return set()
     if is_admin(db, user):
         return {'read', 'edit', 'review', 'manage'}

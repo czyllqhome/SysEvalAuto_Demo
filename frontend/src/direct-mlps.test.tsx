@@ -56,3 +56,19 @@ it('uses one creation flow and selects the system type inside the dialog', async
   expect(screen.getByLabelText('评估范围')).toBeInTheDocument()
   expect(screen.getByLabelText('系统类型')).toHaveValue('existing')
 })
+
+it('uploads six-field source files only on an explicit administrator action', async () => {
+  const writes: string[] = []
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
+    if (options?.method === 'POST') { writes.push(url); return new Response(JSON.stringify({ active: true, controls: [] })) }
+    return new Response(JSON.stringify(url.endsWith('/source-controls') ? { active: true, can_upload: true, controls: [] } : { controls: [] }))
+  }))
+  setup(<MLPSLibrary />)
+  await screen.findByRole('button', { name: '校验并保存' })
+  expect(writes).toEqual([])
+  const file = new File(['source,control_identifier,security_domain,security_control_point,control_requirement,risk_level'], 'controls.csv', { type: 'text/csv' })
+  fireEvent.change(screen.getByLabelText('选择控制条目文件'), { target: { files: [file] } })
+  fireEvent.click(screen.getByRole('button', { name: '校验并保存' }))
+  await waitFor(() => expect(writes).toEqual(['/api/v1/source-controls/uploads']))
+  expect(await screen.findByText('文件已校验并保存。')).toBeVisible()
+})

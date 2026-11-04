@@ -57,7 +57,7 @@ def local_prd(source: dict, language: str) -> dict:
                              "source_context_item_ids": [], "source_control_ids": [control["id"]],
                              "dependencies": [], "acceptance_criteria": [text["verification"]]})
     return {"title": f"{source['name']} · {'产品需求文档' if zh else 'Product requirements'}",
-            "summary": context["summary"], "requirements": requirements,
+            "summary": context["summary"] or source["name"], "requirements": requirements,
             "assumptions": ["本地规则草稿，验收条件需人工细化。" if zh else
                             "Local rule-based draft; acceptance criteria require human refinement."],
             "open_questions": context.get("questions", [])}
@@ -173,6 +173,8 @@ def model_error(status: int) -> DomainError:
 
 def output_schema(kind: str, source: dict | None = None) -> dict:
     schema = SCHEMAS[kind].model_json_schema()
+    if kind == 'narrative_refinement' and source and source.get('topic') == 'function_expansion':
+        schema['properties']['text']['maxLength'] = 4000
     if kind == "prd_generation" and source is not None:
         slots = prd_slots(source)
         properties = schema["$defs"].pop("Requirement")["properties"]
@@ -254,7 +256,7 @@ def prd_transport_source(source: dict, language: str) -> dict:
         controls.append({"id": control["id"],
                          "security_domain": fields.get("security_domain") or control.get("domain", ""),
                          "control_requirement": text.get("description") or fields.get("control_requirement", "")})
-    return {**source, "controls": controls, "requirement_slots": prd_slots(source)}
+    return {**{k: v for k, v in source.items() if k != "network_topology"}, "controls": controls, "requirement_slots": prd_slots(source)}
 
 
 def model_input_limit() -> int:
@@ -268,7 +270,7 @@ def model_input_limit() -> int:
 
 
 async def generate(kind: str, source: dict, language: str, mode: str) -> tuple[dict, dict]:
-    if kind.startswith('narrative_refinement:'):
+    if kind.startswith(('narrative_refinement:', 'function_expansion:')):
         if mode != 'openrouter':
             raise DomainError('INVALID_GENERATION_MODE')
         kind = 'narrative_refinement'
@@ -391,4 +393,8 @@ def render_prd(data: dict, source: dict, language: str, template=None) -> str:
     lines += ["", f"## {heading('待澄清问题', 'Open questions')}", ""] + [f"- {x}" for x in data["open_questions"]]
     lines += ["", f"## {heading('分级例外', 'Classification exceptions')}", "",
               "```json", json.dumps(source["classification"].get("exceptions", []), ensure_ascii=False, indent=2), "```", ""]
+    from .topology import markdown as topology_markdown
+    topology = topology_markdown(source.get('network_topology', []), language)
+    if topology:
+        lines += ['', '## ' + heading('系统开发架构', 'System development architecture'), '', topology]
     return "\n".join(lines)

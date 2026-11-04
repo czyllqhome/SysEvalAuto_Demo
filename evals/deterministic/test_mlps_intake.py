@@ -430,7 +430,7 @@ def test_data_details_are_nested_conditional_preserved_and_required_when_selecte
     assert validate(answers, notes)[0]['core_data_details'] == 'Core dataset description'
 
 
-@pytest.mark.parametrize(('answer', 'floor'), [('仅经VPN/零信任接入', 3), ('存在受控互联网入口', 2), ('存在公众可访问入口', 1), ('无', None)])
+@pytest.mark.parametrize(('answer', 'floor'), [('仅经VPN/零信任接入', 3), ('存在受控互联网入口', 2), ('存在公众可访问入口', 2), ('无', 1)])
 def test_internal_network_minimum_is_separate_from_national_matrix(answer, floor):
     answers, notes = complete()
     answers.update(info_rights_severity=1, external_network_access=answer)
@@ -438,7 +438,7 @@ def test_internal_network_minimum_is_separate_from_national_matrix(answer, floor
     assert result['base_level'] == 1
     assert result['organization_minimum'] == (floor or 1)
     assert result['proposed_level'] == (floor or 1)
-    assert result['organization_rule_version'] == 'AMER-INTERNAL/4'
+    assert result['organization_rule_version'] == 'AMER-INTERNAL/5'
     assert [row['field'] for row in result['organization_rule_trace'] if row['code'] == 'AMER-NET-MIN'] == (['external_network_access'] if floor else [])
 
 
@@ -670,3 +670,12 @@ def test_retired_and_conditionally_hidden_answers_do_not_change_current_result()
              cii_status='正式认定', large_pi_public_bigdata='两者均是')
     assert evaluate(a, notes) == baseline
     assert a['hosted_target_levels'][0]['confirmed_level'] == '5'
+
+@pytest.mark.parametrize('entry', ['无', '存在公众可访问入口'])
+def test_network_minimum_never_reduces_higher_matrix_result(entry):
+    answers, notes = complete()
+    answers.update(info_national_severity=1, external_network_access=entry)
+    result = evaluate(answers, notes)
+    assert result['base_level'] == 3
+    assert result['proposed_level'] == 3
+    assert result['rule_engine_version'] == '1.8.1'

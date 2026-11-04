@@ -583,3 +583,154 @@ Dashboard creation entries for new-system and existing-system assessments use th
 Supplier response cards are split into Business functions and Control requirements pages with per-category completion counts. Combined-origin requirements appear in both pages and share one answer. Autosave and final submission retain the complete round across both pages.
 
 Impact review offers Accept all implementable items for submitted supplier yes responses, across business and control requirements. It fills only undecided findings, preserves authored rationale, supplies a bilingual default accountability/risk rationale, and leaves final persistence to Save review decisions. Existing exception review, revision checks and independent baseline confirmations still apply.
+
+## 2026-11-04: PRD 初稿八范围 / Eight-part PRD draft
+
+默认 PRD 按开发范围、角色权限、业务流程、功能需求、数据接口、安全要求、验收标准、上线计划组织。
+分级问卷按当前可见字段逐题归类，保留题号、问题、原始答案及说明；未收集答案留空，退役和条件隐藏字段不参与新初稿。
+部门/责任单位/用户归角色权限，典型场景/交易/替代机制归业务流程，部署方式归上线计划，RTO/RPO 归验收标准；
+数据、外部连接及依赖归数据接口，网络边界与影响场景归安全要求。问卷没有收集的权限矩阵、上线日期等不自动补造。
+已有业务需求、控制原文、验收条件和来源追踪继续保留；本地规则/模型草稿标识及评审要求保持不变。
+变更适用于使用默认模板新生成的文档，历史 PRD 和已固定的自定义模板不覆盖，无数据库迁移。
+
+The default draft groups visible grading questions and collected answers into eight sections.
+Missing answers remain blank; retired and hidden answers are excluded. Authored text, source references,
+requirement acceptance criteria and generation labels remain intact. Existing documents and custom
+pinned templates are preserved. No database migration is needed.
+
+## 2026-11-04: Administrator assessment deletion
+
+Organization administrators can delete an assessment from its ledger row after reviewing
+its name in a confirmation dialog (Chinese/English). DELETE `/api/v1/systems/{id}` requires
+administrator authority, the same customer organization, CSRF and the current `version`.
+Deletion stores `deleted_at`/`deleted_by` in the draft, advances revision/version to fence
+old jobs, hides the ledger entry and blocks ordinary assessment access. Historical records,
+source references, attachments and baseline hashes remain stored. Both assessment and
+administration audit record the action. This is a soft deletion; no database migration or
+runtime-data reset is required. There is no restore UI in this release.
+
+## 2026-11-04: Eight-part application brief / 应用说明初稿八范围
+
+第 2 步应用说明初稿同步使用开发范围、角色权限、业务流程、功能需求、数据接口、安全要求、验收标准、上线计划八个章节。
+当前有效且可见的分级问题与答案归入对应章节，未收集内容留空，保留原有人工编辑与保存。
+安全要求下的“安全开发需求”区域留空，控制适用条件以独立折叠审查项保留。
+既有草稿和新评估直接使用新布局，无需重新生成或清除记录。
+
+The application brief now shares the eight-part PRD structure. Visible questionnaire
+facts are grouped by section, missing answers remain blank, and security development
+requirements are left empty. Existing authored fields and confirmation behavior remain.
+
+## 2026-11-04: PRD review refinements / 初稿审查调整
+
+初稿及新生成的默认 PRD 不再列出 B03 独立业务、C04 公共服务判断和重复的 A05 功能原文。
+角色权限保留部门信息，并从已确认问卷列出部门对接人；B02 使用其说明中实际填写的负责主体名称，未填写留空。
+移除使用/审批角色、业务责任角色输入及其必填拦截，历史值保留。控制适用条件不再展示于初稿，历史条件与分级规则保持有效。
+默认正式 PRD 同步移除角色/责任角色正文；功能需求、来源及安全开发需求的既有覆盖机制保留。
+
+Drafts and newly generated default PRDs omit B03, C04 and duplicate A05 facts. Department
+contacts and the named security-responsible entity come from confirmed questionnaire data.
+Removed role inputs no longer block confirmation; stored historical values remain intact.
+
+## 2026-11-04: Architecture and acceptance grouping
+
+初稿和默认 PRD 第六章改为“系统开发架构”，B05 部署方式从上线计划移入该章。
+E03/E04/E05 中断影响场景移至验收标准；B04.1、E06、E07 和全部 E09/E10 影响定级字段不进入 PRD。
+这些变更仅调整文档展示，分级问卷、保存答案和定级规则不变；初稿安全开发需求保持空白。
+
+Draft and default PRD section 6 is now System development architecture, including deployment.
+Outage scenarios belong to acceptance criteria. Connected-system grade and impact-grading
+fields are omitted from documents; questionnaire storage and grading rules are unchanged.
+
+## 2026-11-04: Declarative PRD fact headings
+
+初稿与默认 PRD 的问卷事项使用陈述式小标题，例如“系统的主要建设目的”，不显示题号或提问语气。
+中英文标题共用 `backend/app/data/prd_fact_headings.json`，答案原文保持原样。
+来源题号及字段在初稿 DOM 属性、Markdown 注释中保留；原分级问卷的问题文案不变。
+默认 PRD 的事实段落改为小标题加正文，新生成文档生效，历史文档不重写。
+
+Questionnaire facts now use shared bilingual declarative headings in draft and default PRD.
+Source identities remain in DOM attributes and Markdown comments. Authored answers and
+original questionnaire prompts remain intact.
+
+## 2026-11-04: Remove duplicate department editor
+
+初稿移除“涉及部门”输入框和必填拦截，保留问卷来源的“业务部门及对接人”表格。
+默认正式 PRD 不再重复输出 context.departments；问卷部门、对接人与历史人工数据继续保留。
+Department names are no longer a required context-confirmation field; the questionnaire
+remains the displayed source for departments and contacts.
+
+## 2026-11-04: Standalone security development section and SLA
+
+初稿及默认 PRD 将“安全开发需求”提升为独立第七章，初稿内容留空。
+原验收标准章节改为第八章 SLA，保留恢复目标和中断影响原文；上线计划顺延为第九章。
+Security development requirements is now a top-level section. The former acceptance
+section is titled SLA; existing criteria and source traceability remain preserved.
+
+初稿不再展示“查看原始描述（只读）”折叠区域；原始描述仍存储并保留来源引用，整理操作仍使用原始数据。
+The read-only original-notes disclosure is omitted from the PRD draft; stored source notes
+and traceability remain available to the generation workflow.
+
+初稿及默认 PRD 不再显示“系统间数据交换与功能对接”的是/否判断（B04），具体系统接口和外部连接说明继续保留；问卷与分级逻辑不变。
+The integration yes/no fact is omitted from draft/default PRD; actual interface and external
+connection descriptions remain included.
+
+## 2026-11-04: Remove duplicate context text editors
+
+初稿移除目标摘要、开发范围说明、业务流程、数据说明、系统集成五个输入区域，保留同章节问卷事实。
+目标摘要不再作为确认应用说明的必填项。历史人工内容仍保存在 Context/草稿，不被页面修改删除。
+默认正式 PRD 移除对应 summary/scope/workflow/data_and_integrations 槽位，缺失槽位不再自动追加到文末。
+自定义模板显式引用上述槽位时仍读取已保存值；来源覆盖和功能需求校验保留。
+
+The draft omits five duplicate context editors and retains questionnaire facts. Stored
+manual text remains intact. Default PRDs omit the corresponding prose slots and do not
+append them as fallback sections. Summary is no longer required for brief confirmation.
+
+## 2026-11-04: Per-function AI description expansion
+
+初稿每个功能说明旁新增“AI 扩写功能说明”。点击时先保存当前草稿，后台固定此功能的
+ID、简述、现有说明及评估修订；只将该功能内容提交已配置 OpenRouter，使用专用
+`narrative_refinement:function_expansion` 管理员提示词。任务使用已有持久化队列、预算、
+配置快照、重试和来源哈希校验，job.kind 使用短哈希适配现有 40 字符列，无迁移。
+普通编辑和打开页面不调用模型，本地规则模式不支持冒充 AI 扩写。
+建议明确标为 AI 待确认，澄清问题单列，只有显式采纳才替换目标功能说明；简述、其他功能和
+问卷答案不变。生成期间修改简述/说明、删除功能或修订评估会使旧建议不可覆盖新内容。
+可撤销本次采纳；继续人工修改说明后不能用撤销覆盖修改。所有验证使用离线模型替身。
+
+Each function has an explicit AI expansion action. Only that saved function brief and
+existing description are sent. Suggestions require review and acceptance, support undo,
+and cannot overwrite changed source text. Existing jobs, model budgets, permissions and
+configuration snapshots remain in force. No database migration or runtime-data reset.
+
+## 2026-11-04: Dedicated grading-result workflow node
+
+客户侧评估导航在“系统定级”后增加“定级结果”，后续节点顺延。等级确认后启用，
+`/systems/{id}/grade-result` 展示 classification.assessment 的已确认快照，复用等级、
+影响矩阵、内部下限及待复核展示；不调用预览、确认、保存或模型接口。
+页面的返回问卷与审查应用说明入口只导航。未确认结果显示空态；历史仅有等级而无详细结果时
+说明缺少历史计算快照，不以现行规则擅自补算。供应商工作流不显示该客户节点。
+
+A dedicated Grade result node follows System grading in customer workflows. It reads the
+confirmed snapshot without recalculation or mutations. Legacy records without a detailed
+snapshot show an explicit explanation. Existing permission and organization checks apply.
+
+功能 AI 扩写允许在 CONTROL_REVIEW 和 PRD_REVIEW 阶段运行，独立于整份应用说明的重新整理权限。
+任务只生成建议；确认内容与已有 PRD 保持原状，需采纳并重新确认应用说明才更新下游。
+Per-function expansion remains available during control and PRD review. Suggestions do not
+silently revise the confirmed context or published PRD.
+
+## 2026-11-04: Evidence-card question and answer layout
+
+定级结果和问卷预览的所有分级依据卡片统一为：粗体主标题展示完整问题，
+滑动条上方同一行展示已选答案与对应等级。内部规则卡片和 E09/E10 影响矩阵卡片同步适用；
+数据数量/容量卡片附具体分项，未知与无定级贡献仍分开显示。仅修改展示，不改变计算或快照。
+
+All grading evidence cards show the full question as their bold heading and pair the
+selected answer with its computed grade above the scale. Numeric rules and confirmed
+snapshots are unchanged; unknown and no-contribution states remain distinct.
+# PRD network topology images (2026-11-04)
+
+The application brief shows PNG/JPEG/WebP evidence uploaded for B07 (`network_zones_description`) under **系统开发架构 / System development architecture → 网络拓扑图 / Network topology diagram**. The manifest uses persisted evidence for the assessment, including uploads whose questionnaire note reference has not yet been saved. No duplicate upload or database migration is required. Non-image attachments remain downloadable evidence and are not embedded as diagrams.
+
+Image endpoints enforce the existing customer organization and assessment access boundaries; supplier users cannot browse raw questionnaire attachments. PRD jobs pin image IDs, filenames, MIME types and SHA-256 values in the source snapshot. Image bytes are excluded from model transport and are hydrated only on successful publication after revision/source checks. New PRD documents and manual revisions embed the original raster bytes as data URLs, so the authorized supplier document and Markdown download preserve the same topology. Existing immutable PRDs and baseline hashes are not rewritten. Legacy pinned templates without the new slot receive the diagram inside their architecture section, or an architecture section is appended.
+
+The preview permits embedded PNG/JPEG/WebP only; remote images, SVG, raw HTML and unsafe links remain blocked. Regression coverage verifies image scope, original-byte embedding, source staleness, supplier document access, historical PRD immutability and both draft/formal image rendering.

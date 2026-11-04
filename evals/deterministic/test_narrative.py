@@ -100,3 +100,58 @@ def test_mlps_description_refinement_uses_only_description_and_rejects_stale(own
     with app.state.sessions() as db:
         source = job_input(db, db.get(System, sid), f'narrative_refinement:{topic}')
         assert source['text'] == expected
+
+@pytest.mark.parametrize('change_source', [False, True])
+def test_function_expansion_uses_one_saved_function_and_never_autowrites(owner, monkeypatch, change_source):
+    from test_workflow import BRIEF, command, current
+    from app.db import Job
+    from sqlalchemy import select
+    app, client = owner
+    monkeypatch.setenv('OPENROUTER_API_KEY', 'offline-test')
+    monkeypatch.setenv('OPENROUTER_MODEL', 'offline-test')
+    sid = client.post('/api/v1/systems', json={'name': 'Function expansion'}).json()['system']['id']
+    proposal = {**BRIEF, 'functions': [dict(BRIEF['functions'][0]), {'id': 'F-2', 'title': 'Other function', 'description': 'Must stay unchanged', 'source_blocks': []}]}
+    command(client, sid, 'context-draft', {'proposal': proposal}, method='put')
+    result = command(client, sid, 'jobs', {'kind': 'function_expansion', 'function_id': 'F-1', 'mode': 'openrouter'}).json()
+    job_id = result['job_id']
+    if change_source:
+        proposal['functions'][0]['description'] = 'Edited during generation'
+        command(client, sid, 'context-draft', {'proposal': proposal}, method='put')
+    async def fake(kind, source, language, mode):
+        assert kind.startswith('function_expansion:') and len(kind) <= 40
+        assert source['function_id'] == 'F-1'
+        assert source['topic'] == 'function_expansion'
+        assert source['text'] == 'Create tickets\n\nCreate a service ticket'
+        assert 'Must stay unchanged' not in source['text']
+        return {'text': 'Expanded function description', 'questions': ['Which request fields?']}, {'tokens': 12}
+    monkeypatch.setattr(worker, 'generate', fake)
+    assert asyncio.run(worker.run_once(app.state.sessions))
+    job = client.get(f'/api/v1/jobs/{job_id}').json()
+    assert job['state'] == ('stale' if change_source else 'succeeded')
+    assert job['output'] is None if change_source else job['output']['text'] == 'Expanded function description'
+    assert current(client, sid)['system']['draft']['proposal']['functions'] == proposal['functions']
+    with TestClient(app) as other:
+        register(other, 'function-other@example.test')
+        assert other.get(f'/api/v1/jobs/{job_id}').status_code == 404
+    command(client, sid, 'jobs', {'kind': 'function_expansion', 'function_id': 'missing', 'mode': 'openrouter'}, expected=422)
+    command(client, sid, 'jobs', {'kind': 'function_expansion', 'function_id': 'F-1', 'mode': 'local'}, expected=422)
+    with app.state.sessions() as db:
+        assert len(list(db.scalars(select(Job).where(Job.system_id == sid)))) == 1
+
+@pytest.mark.parametrize('status', ['CONTROL_REVIEW', 'PRD_REVIEW'])
+def test_function_expansion_is_allowed_after_brief_confirmation_without_mutating_baseline(owner, monkeypatch, status):
+    from app.db import System
+    from test_workflow import BRIEF, command, current
+    app, client = owner
+    monkeypatch.setenv('OPENROUTER_API_KEY', 'offline-test')
+    monkeypatch.setenv('OPENROUTER_MODEL', 'offline-test')
+    sid = client.post('/api/v1/systems', json={'name': 'Review function'}).json()['system']['id']
+    command(client, sid, 'context-draft', {'proposal': BRIEF}, method='put')
+    with app.state.sessions.begin() as db:
+        system = db.get(System, sid)
+        system.status = status
+        system.context = BRIEF
+    result = command(client, sid, 'jobs', {'kind': 'function_expansion', 'function_id': 'F-1', 'mode': 'openrouter'}).json()
+    assert result['job_id']
+    assert current(client, sid)['system']['status'] == status
+    assert current(client, sid)['system']['context'] == BRIEF

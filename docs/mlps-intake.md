@@ -1,3 +1,11 @@
+> 当前 AmerSports-2.17 / AMER-INTERNAL/5 / 规则引擎1.8.1：公网可访问入口最低2级，无公网入口最低1级。历史结果需重新计算确认后更新。
+
+> 应用说明以 PRD 初稿展示，增加问卷部署/业务连续性事实和安全开发需求占位。正式 PRD 将已纳入控制按控制域分组，跨域需求以联合域分组，保留来源与验收引用。
+
+> 应用说明审查移除“范围与不做事项”输入及必填校验，已有值保留。
+
+> A05 和 A06 支持逐条添加、编辑及移除。原有多行文本按行显示，保存和 AI 优化沿用文本格式。A05 各条分别预填为应用说明功能项。
+
 > 系统信息录入页面退役：确认分级后直接审查应用说明，旧 discovery 链接重定向。无历史描述时以已确认问卷预填可编辑说明，缺少职责/范围须人工补齐并确认；历史描述及说明保留。
 
 > 问卷每页提供直接查看系统等级入口，填写完成后先保存再计算跳转；沿用完整性及失败校验。
@@ -301,3 +309,14 @@ D 组重新编号 D01–D12；原 D08 为 D07，改用 data_volume_ranges 字典
 人数作为 D02 选“是”后的子问题，不再独立编号或计入题目总数。D02 选“是”时，人数也填写后才计为已填写；隐藏子问题仍保留原答案。新人数范围增加小规模档位；历史数字及旧区间保持原值和原上下界，风险提示阈值不变。D 组主问题按当前显示顺序连续编号，来源编号和存储字段保持不变。
 
 The personal-information count is nested under D02 and excluded from the main-question total. A Yes answer is complete when its count is supplied. Hidden values, historical numbers and former bands retain their original values and bounds. D main questions are numbered consecutively in their visible order; source references and storage keys remain stable.
+
+## 2026-11-04: Public internet minimum updated
+
+AmerSports-2.17 / AMER-INTERNAL/5 / 规则引擎 1.8.1：B06 公众可访问入口的内部下限由 1 级调整为 2 级，
+无公网访问明确记录为 1 级；受控互联网入口仍为 2 级、仅 VPN/零信任接入仍为 3 级。
+新计算继续取影响矩阵及全部内部下限最高值，未知项不按无公网处理。
+中英文提示及 T01 风险提示同步更新。已确认历史结果快照不改写，需重新计算并确认后使用新规则。
+
+Public ingress now establishes internal level 2; no internet ingress explicitly establishes
+level 1. Existing controlled-ingress and VPN rules remain. Higher matrix results are preserved.
+Historical confirmed snapshots retain their original rule version until explicit reconfirmation.

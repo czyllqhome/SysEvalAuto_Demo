@@ -30,7 +30,7 @@ function Editor({ detail, settings, refresh }: { detail: SystemDetail; settings:
   const navigate = useNavigate()
   const saved = settings.saved
   const [facts, setFacts] = useState(saved.facts ?? {})
-  const [frameworks, setFrameworks] = useState(saved.frameworks?.filter(f => ['MLPS_LEVEL_2', 'MLPS_LEVEL_3'].includes(f)).length ? saved.frameworks.filter(f => ['MLPS_LEVEL_2', 'MLPS_LEVEL_3'].includes(f)) : ['MLPS_LEVEL_2'])
+  const [frameworks, setFrameworks] = useState(saved.frameworks?.filter(f => ['MLPS_LEVEL_1', 'MLPS_LEVEL_2', 'MLPS_LEVEL_3'].includes(f)).length ? saved.frameworks.filter(f => ['MLPS_LEVEL_1', 'MLPS_LEVEL_2', 'MLPS_LEVEL_3'].includes(f)) : ['MLPS_LEVEL_2'])
   const [mode, setMode] = useState(saved.mode ?? 'questionnaire'), [level, setLevel] = useState(saved.level ?? 'L2')
   const [reason, setReason] = useState(saved.reason ?? ''), [target, setTarget] = useState(saved.mlps_target ?? '')
   const [result, setResult] = useState<Result | null>(null), [problem, setProblem] = useState(''), [waiting, setWaiting] = useState(false)
@@ -79,7 +79,7 @@ function Editor({ detail, settings, refresh }: { detail: SystemDetail; settings:
       {settings.framework_options.map(f => <label className="check-label" key={f}><input type="checkbox" checked={frameworks.includes(f)} onChange={e => {
         setFrameworks(e.target.checked ? [...frameworks, f] : frameworks.filter(x => x !== f)); setResult(null)
         if (f === 'MLPS' && !e.target.checked) setTarget('')
-      }} />{f === 'MLPS_LEVEL_2' ? t('MLPS 2 级', 'MLPS Level 2') : t('MLPS 3 级', 'MLPS Level 3')}</label>)}
+      }} />{f === 'MLPS_LEVEL_1' ? t('MLPS 1 级', 'MLPS Level 1') : f === 'MLPS_LEVEL_2' ? t('MLPS 2 级', 'MLPS Level 2') : t('MLPS 3 级', 'MLPS Level 3')}</label>)}
       <p className="field-hint">{t('框架来自组织控制库；匹配时同时检查来源框架、等级方案和适用条件。', 'Framework choices come from the organization library. Matching checks source framework, level profile and applicability together.')}</p>
       <section className="screening-facts" aria-labelledby="screening-facts-title">
         <h3 id="screening-facts-title" className="screening-section-title">{t('填写系统情况', 'Describe the system')}</h3>

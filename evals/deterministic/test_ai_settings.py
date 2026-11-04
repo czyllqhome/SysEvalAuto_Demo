@@ -21,7 +21,7 @@ def test_settings_isolation_revision_and_secret_boundary(owner, monkeypatch):
     app, client = owner
     monkeypatch.setenv('OPENROUTER_API_KEY', 'secret-never-returned')
     data = body(client)
-    assert len(data['prompts']) == 16
+    assert len(data['prompts']) == 17
     assert 'prd_import_extraction' in data['prompts']
     data['model'] = 'test/configured-model'
     saved = client.put(PATH, json=data)

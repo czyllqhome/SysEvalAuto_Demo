@@ -9,6 +9,13 @@ function View({ id = 'v1' }: { id?: string }) {
   return <LocaleProvider><Toggle /><PrdPreview systemId="system" prdId={id} /></LocaleProvider>
 }
 afterEach(() => { cleanup(); localStorage.clear(); vi.unstubAllGlobals() })
+it('displays embedded raster topology images while blocking SVG and remote image requests', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response('## 系统开发架构\n\n### 网络拓扑图\n\n![网络拓扑图](data:image/png;base64,YWJj)\n\n![svg](data:image/svg+xml;base64,YWJj)\n\n![remote](https://example.test/tracker.png)')))
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const { container } = render(<QueryClientProvider client={client}><View /></QueryClientProvider>)
+  expect(await screen.findByRole('img', { name: '网络拓扑图' })).toHaveAttribute('src', 'data:image/png;base64,YWJj')
+  expect(container.querySelectorAll('img')).toHaveLength(1)
+})
 it('renders saved template headings and GFM tables, retaining authored text across locale and version changes', async () => {
   const fetcher = vi.fn(async (url: string) => new Response(url.includes('/v2/') ? '# 新修订\n\n## 自定义章节' : '# 保存的文档\n\n## 7 外部集成\n\n| 接口 | 说明 |\n| --- | --- |\n| API | 原文 |\n\n## 2 角色'))
   vi.stubGlobal('fetch', fetcher)

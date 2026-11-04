@@ -54,3 +54,17 @@ it('bulk accepts submitted yes responses', () => {
   expect(screen.getByLabelText('客户决定')).toHaveValue('accept')
   expect((screen.getByLabelText('理由与责任安排') as HTMLTextAreaElement).value).toContain('接受供应商可实施承诺')
 })
+
+it('shows the source High failure and prevents accepting or freezing the unresolved control', () => {
+  const detail: SystemDetail = {
+    system: { id: 's', name: 'Test', status: 'RESULT_REVIEW', version: 1, revision: 1, context: {}, draft: {}, classification: {}, created_at: 0, updated_at: 0 },
+    permissions: ['read', 'edit', 'review', 'manage'], controls: [], prd: null, round: null, baseline: null,
+    report: { id: 'r', mode: 'local', reviewed: true, source_assessment: { status: 'failed', failed_requirements: ['REQ-1'], blocking_requirements: ['REQ-1'] },
+      decisions: { f: { decision: '', reason: '' }, _exceptions: { decision: 'accept', reason: 'Reviewed' } },
+      data: { summary: 'Review', findings: [{ id: 'f', requirement_id: 'REQ-1', severity: 'low', title: 'Finding', evidence_field: 'limitations', evidence: 'Cannot implement', impact: 'Gap', recommendation: 'Revise' }] } },
+  }
+  render(<QueryClientProvider client={new QueryClient()}><LocaleProvider><AuthContext.Provider value={{ user: { id: 'm', name: 'Manager', email: 'm@test', role: 'member', org_id: 'org' }, csrf: '', model_configured: false }}><Preferences><MemoryRouter><ImpactPanel detail={detail} /></MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
+  expect(screen.getByText('系统安全评估结果：未通过')).toBeVisible()
+  expect(screen.getByRole('button', { name: '冻结方案并收集双方确认' })).toBeDisabled()
+  expect(screen.getByRole('option', { name: '接受并承担已记录残余风险' })).toBeDisabled()
+})

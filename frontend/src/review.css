@@ -19,7 +19,7 @@
 .review-section textarea, .review-section input { font-size: 13px; }
 .review-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; }
 .review-function { padding: 16px 18px 1px; margin-bottom: 13px; background: #f7f7f1; border-left: 2px solid #a5b49b; }
-.review-function > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.review-function > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
 .review-function > div > .mono { color: var(--muted); font-size: 10px; }
 .review-function > label { margin-bottom: 17px; }
 .review-aside { position: sticky; top: 22px; min-width: 0; }
@@ -48,3 +48,13 @@
 .brief-review [aria-invalid="true"] { border-color: #b74a35; }
 .brief-review .notice ol { padding-left: 22px; }
 .brief-review .notice li { margin: 10px 0; line-height: 1.8; }
+
+.prd-questionnaire-facts > div { padding: 14px 0; border-bottom: 1px solid #e3eaf3; }
+.prd-questionnaire-facts dt { font-weight: 600; margin-bottom: 8px; }
+.prd-questionnaire-facts dd { margin: 0; white-space: pre-wrap; line-height: 1.8; }
+
+.review-function > .compact-refinement { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 16px; }
+
+.network-topology figure { margin: 18px 0; }
+.network-topology-image { display: block; max-width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 6px; }
+.network-topology figcaption { margin-top: 8px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }

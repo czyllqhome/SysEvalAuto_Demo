@@ -172,7 +172,7 @@ def evaluate(raw, notes=None):
     if type(a.get('sensitive_pi_count')) in (int, float) and count and count[1] is not None and a['sensitive_pi_count'] > count[1]:
         issue('QA03', 'sensitive_pi_count', '敏感个人信息人数超过系统总人数。', 'Sensitive-information count exceeds the system total.')
     if a.get('external_network_access') == '存在公众可访问入口':
-        alerts.append({'code': 'T01', 'zh': '公众入口：触发 Amer Sports 内部最低 1 级；国家标准矩阵等级仍独立计算。', 'en': 'Public ingress triggers the Amer Sports internal level 1 minimum; the national-standard matrix is calculated independently.'})
+        alerts.append({'code': 'T01', 'zh': '公众入口：触发 Amer Sports 内部最低 2 级；国家标准矩阵等级仍独立计算。', 'en': 'Public ingress triggers the Amer Sports internal level 2 minimum; the national-standard matrix is calculated independently.'})
     for threshold, code in [(1000000, 'T02'), (10000000, 'T03')]:
         if count and count[0] >= threshold:
             alerts.append({'code': code, 'zh': '个人信息规模触发复核；处理者与系统统计分开，不自动提高等保等级。', 'en': 'Personal information scale triggers review; operator and system counts are separate and do not raise the MLPS grade.'})
@@ -190,7 +190,7 @@ def evaluate(raw, notes=None):
                                        'en': 'The highest connected-system grade establishes an Amer Sports internal minimum.'})
         elif linked_grade == '不确定':
             issue('LINK_GRADE_UNKNOWN', 'interconnected_system_level', '请核实对接系统最高等级，才能确认内部等级下限。', 'Verify the highest connected-system grade before confirming the internal minimum.')
-    network_minimum = {'仅经VPN/零信任接入': 3, '存在受控互联网入口': 2, '存在公众可访问入口': 1}.get(a.get('external_network_access'))
+    network_minimum = {'无': 1, '仅经VPN/零信任接入': 3, '存在受控互联网入口': 2, '存在公众可访问入口': 2}.get(a.get('external_network_access'))
     if network_minimum:
         organization_trace.append({'code': 'AMER-NET-MIN', 'field': 'external_network_access', 'answer': a['external_network_access'], 'level': network_minimum,
                                    'zh': '网络入口方式触发 Amer Sports 内部等级下限。', 'en': 'The network ingress choice establishes an Amer Sports internal minimum.'})
@@ -253,11 +253,11 @@ def evaluate(raw, notes=None):
     status = 'insufficient_impact_data' if not base else 'pending_review' if issues else 'preliminary_complete'
     return {'status': status, 'business_information_level': dimensions[0], 'system_service_level': dimensions[1],
             'base_level': base, 'special_principle_minimum': minimum, 'proposed_level': proposed,
-            'organization_minimum': organization_minimum, 'organization_rule_trace': organization_trace, 'organization_rule_version': 'AMER-INTERNAL/4',
+            'organization_minimum': organization_minimum, 'organization_rule_trace': organization_trace, 'organization_rule_version': 'AMER-INTERNAL/5',
             'known_lower_bound_level': proposed, 'is_lower_bound_only': bool(unknown) or base is None or any(i['code'] in ('LINK_GRADE_UNKNOWN', 'NETWORK_MIN_UNKNOWN', 'SERVICE_MIN_UNKNOWN', 'TRANSACTION_MIN_UNKNOWN', 'BUSINESS_MIN_UNKNOWN', 'BUSINESS_MIN_REVIEW', 'POPULATION_MIN_UNKNOWN', 'POPULATION_MIN_REVIEW', 'PERSONAL_SCOPE_MIN_UNKNOWN', 'DATA_CLASS_MIN_UNKNOWN', 'CROSS_BORDER_MIN_UNKNOWN', 'RECORDS_MIN_UNKNOWN', 'STORAGE_MIN_UNKNOWN', 'DEPENDENCY_MIN_UNKNOWN', 'SAFETY_MIN_UNKNOWN') or i['code'] == 'REQUIRED' and i['field'] in ('interconnected_system_level', 'public_service_nature', 'involves_transactions', 'critical_business', 'personal_info_count_system', 'data_security_classification', 'cross_border_data', 'data_volume_ranges', 'external_dependency_impact', 'safety_impact') for i in issues), 'blocking_unknown_fields': unknown,
             'issues': issues, 'alerts': alerts, 'rule_trace': trace, 'final_confirmed_level': None,
             'manual_review_required': bool(issues) or bool(proposed and proposed >= 2),
-            'standard_version': 'GB/T 22240-2020', 'questionnaire_version': 'AmerSports-2.16', 'rule_engine_version': '1.8.0',
+            'standard_version': 'GB/T 22240-2020', 'questionnaire_version': 'AmerSports-2.17', 'rule_engine_version': '1.8.1',
             'sector_rules_status': 'not_collected', 'verified_sector_minimum': None}
 
 
@@ -279,8 +279,8 @@ def preview(db, org_id, body):
     result = evaluate(answers, notes)
     catalog, release, cfg = screening.resolve(db, org_id, body.get('catalog_id'))
     frameworks = body.get('frameworks', [])
-    if not isinstance(frameworks, list) or not frameworks or any(f not in ('MLPS_LEVEL_2', 'MLPS_LEVEL_3') for f in frameworks):
-        invalid('frameworks', 'Choose MLPS level 2 or 3 reference controls')
+    if not isinstance(frameworks, list) or not frameworks or any(f not in ('MLPS_LEVEL_1', 'MLPS_LEVEL_2', 'MLPS_LEVEL_3') for f in frameworks):
+        invalid('frameworks', 'Choose MLPS level 1, 2 or 3 reference controls')
     facts = normalize_facts({}, cfg)
     facts['data.personal'] = {'是': 'yes', '否': 'no'}.get(personal_info_status(answers), 'unknown')
     facts['net.public_ingress'] = {'无': 'no', '存在公众可访问入口': 'yes', '存在受控互联网入口': 'yes'}.get(answers.get('external_network_access'), 'unknown')

@@ -1,0 +1,154 @@
+{
+  "system_name": [
+    "系统正式名称及简称",
+    "System name and abbreviation"
+  ],
+  "org_name": [
+    "运营及使用单位",
+    "Operating and user organization"
+  ],
+  "system_owner": [
+    "业务部门及对接人",
+    "Business departments and contacts"
+  ],
+  "system_purpose": [
+    "系统的主要建设目的",
+    "System purpose"
+  ],
+  "system_functions": [
+    "主要业务功能",
+    "Main business functions"
+  ],
+  "system_scenarios": [
+    "典型使用场景",
+    "Typical use cases"
+  ],
+  "system_business_type": [
+    "主要业务类型",
+    "Business types"
+  ],
+  "target_type": [
+    "系统对象类型",
+    "System type"
+  ],
+  "security_responsible_entity": [
+    "安全主要负责单位或部门",
+    "Responsible security organization or department"
+  ],
+  "system_interaction": [
+    "系统间数据交换与功能对接",
+    "Data exchange and system integration"
+  ],
+  "deployment_model": [
+    "系统部署方式",
+    "Deployment model"
+  ],
+  "external_network_access": [
+    "外部网络访问方式",
+    "External network access"
+  ],
+  "network_zones_description": [
+    "网络区域划分",
+    "Network zones"
+  ],
+  "internet_entry_description": [
+    "互联网访问入口",
+    "Internet entry points"
+  ],
+  "external_connections_description": [
+    "外部单位连接",
+    "External organization connections"
+  ],
+  "system_interfaces_description": [
+    "系统交互接口",
+    "System interfaces"
+  ],
+  "user_types": [
+    "系统服务用户",
+    "System users"
+  ],
+  "involves_transactions": [
+    "交易业务适用性",
+    "Transaction applicability"
+  ],
+  "service_geography": [
+    "业务服务覆盖范围",
+    "Service geography"
+  ],
+  "critical_business": [
+    "业务重要性",
+    "Business criticality"
+  ],
+  "data_categories": [
+    "系统处理的数据类型",
+    "Data categories"
+  ],
+  "personal_info_count_system": [
+    "个人信息处理人数范围",
+    "Personal information population range"
+  ],
+  "sensitive_pi_types": [
+    "敏感个人信息类别",
+    "Sensitive personal information categories"
+  ],
+  "sensitive_pi_count": [
+    "敏感个人信息涉及人数",
+    "Sensitive personal information population"
+  ],
+  "important_data_basis": [
+    "重要数据内容、用途及认定依据",
+    "Important data and identification basis"
+  ],
+  "core_data_details": [
+    "核心数据内容、用途及认定依据",
+    "Core data and identification basis"
+  ],
+  "registered_users": [
+    "注册及授权用户规模",
+    "Registered and authorized user population"
+  ],
+  "pi_subject_scope": [
+    "个人信息主体范围",
+    "Personal information subjects"
+  ],
+  "data_volume_ranges": [
+    "业务记录数量与数据容量",
+    "Business record volume and storage"
+  ],
+  "data_security_classification": [
+    "数据安全分类",
+    "Data security classification"
+  ],
+  "cross_border_data": [
+    "数据跨境传输适用性",
+    "Cross-border data transfer applicability"
+  ],
+  "data_integrity_criticality": [
+    "数据篡改的业务后果",
+    "Business consequences of data tampering"
+  ],
+  "system_dependencies": [
+    "上下游系统依赖",
+    "Upstream and downstream dependencies"
+  ],
+  "recovery_objectives_h": [
+    "恢复时间目标（RTO）与恢复点目标（RPO）",
+    "Recovery time and recovery point objectives"
+  ],
+  "impact_after_4h": [
+    "系统中断4小时的业务影响",
+    "Business impact of a four-hour outage"
+  ],
+  "impact_after_24h": [
+    "系统中断24小时的业务影响",
+    "Business impact of a 24-hour outage"
+  ],
+  "impact_after_72h": [
+    "系统中断72小时的业务影响",
+    "Business impact of a 72-hour outage"
+  ],
+  "available_workaround": [
+    "人工及其他系统替代机制",
+    "Manual and alternative system workarounds"
+  ]
+}

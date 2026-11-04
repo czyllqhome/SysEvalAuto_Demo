@@ -130,18 +130,19 @@ def test_new_prd_template_preserves_source_coverage_and_snapshot(source_owner):
     assert detail['system']['status'] == 'PRD_REVIEW', detail.get('jobs')
     with app.state.sessions() as db:
         prd = db.get(Prd, detail['prd']['id'])
-        assert 'System requirements and acceptance specification' in prd.markdown
+        assert 'PRD draft' in prd.markdown
         assert len(prd.data['requirements']) == 136
         assert 'Local rule-based draft' in prd.markdown
         assert 'MLPS_level_2_CN.xlsx' in prd.markdown
         assert 'Control source missing in this language' not in prd.markdown
 
 
-def test_existing_reassessment_preserves_predecessor_without_asset(source_owner):
+def test_linked_followup_creation_is_retired(source_owner):
     _, client = source_owner
     body = {'name': 'Existing', 'assessment_type': 'existing', 'scope': 'prod', 'environment': 'prod',
             'system_version': '1', 'as_of': '2026-11-03', 'trigger': 'initial'}
     first = client.post('/api/v1/systems', json=body).json()['system']['id']
     result = client.post('/api/v1/systems', json={**body, 'predecessor_id': first})
-    assert result.status_code == 200, result.text
-    assert result.json()['system']['predecessor_id'] == first
+    assert result.status_code == 422, result.text
+    assert client.get(f'/api/v1/systems/{first}').json()['system']['predecessor_id'] is None
+

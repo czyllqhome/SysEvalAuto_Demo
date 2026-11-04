@@ -45,7 +45,7 @@ describe('bilingual interactions', () => {
     const reviewDetail: SystemDetail = { ...detail, system: { ...detail.system, status: 'CONTEXT_REVIEW', classification: { effective_level: 'L2' }, draft: { ...detail.system.draft, proposal: { ...emptyBrief(), summary: 'Service portal', functions: [{ id: 'F-1', title: 'Create tickets', description: 'Create tickets', source_blocks: ['functions'] }], departments: ['Service'], roles: ['Operator'], owner_role: 'Service owner', scope: 'Tickets only' } } } }
     render(<QueryClientProvider client={client}><LocaleProvider><AuthContext.Provider value={session}><Preferences><MemoryRouter><BriefReviewPanel detail={reviewDetail} /></MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
     expect(screen.getByRole('button', { name: '确认说明并匹配控制' })).toBeDisabled()
-    fireEvent.click(screen.getByLabelText('我已核对说明、职责和范围'))
+    fireEvent.click(screen.getByLabelText('我已核对说明和职责'))
     expect(screen.getByRole('button', { name: '确认说明并匹配控制' })).toBeEnabled()
   })
 
@@ -118,4 +118,27 @@ it('labels an administrator independently of the legacy owner type in both langu
   expect(screen.getByText('Administrator')).toBeVisible()
   expect(screen.getByText('Administration')).toBeVisible()
   expect(screen.queryByText('Customer owner')).not.toBeInTheDocument()
+})
+
+it.each([true, false])('restricts assessment deletion to admin=%s and confirms before sending', async (admin) => {
+  let deleted = false
+  const row = { id: 'delete-target', name: 'Deletion target', status: 'DRAFT', revision: 1, version: 7, updated_at: 1, department: '', level: null }
+  const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.endsWith('/auth/session')) return new Response(JSON.stringify({ ...session, user: { ...session.user, is_admin: admin } }))
+    if (options?.method === 'DELETE') { deleted = true; return new Response(JSON.stringify({ deleted: true })) }
+    return new Response(JSON.stringify(url.endsWith('/systems') && !deleted ? [row] : []))
+  })
+  vi.stubGlobal('fetch', fetcher)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(<QueryClientProvider client={client}><LocaleProvider><MemoryRouter><App /></MemoryRouter></LocaleProvider></QueryClientProvider>)
+  await screen.findByText('Deletion target')
+  if (!admin) { expect(screen.queryByRole('button', { name: '删除评估 Deletion target' })).not.toBeInTheDocument(); return }
+  fireEvent.click(screen.getByRole('button', { name: '删除评估 Deletion target' }))
+  expect(deleted).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: '取消' }))
+  expect(deleted).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: '删除评估 Deletion target' }))
+  fireEvent.click(screen.getByRole('button', { name: '确认删除' }))
+  await waitFor(() => expect(screen.queryByText('Deletion target')).not.toBeInTheDocument())
+  expect(fetcher).toHaveBeenCalledWith('/api/v1/systems/delete-target', expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ version: 7 }) }))
 })

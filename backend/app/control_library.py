@@ -74,8 +74,8 @@ def validate_control(raw, config):
     item.setdefault('retired', False)
     if item.get('review_status') not in ('draft', 'reviewed') or item.get('responsibility_rule') not in RESPONSIBILITIES:
         invalid('review_status', 'Select review status and responsibility')
-    if item.get('source_level') not in (None, '', 2, 3):
-        invalid('source_level', 'Source level must be empty, 2 or 3')
+    if item.get('source_level') not in (None, '', 1, 2, 3):
+        invalid('source_level', 'Source level must be empty, 1, 2 or 3')
     rule = item.get('rule')
     if item.get('applicability_mode') == 'always':
         if rule is not True:

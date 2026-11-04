@@ -3,9 +3,9 @@ import { api, ApiError } from './api'
 import { Button, Notice } from './components'
 import { useLocale } from './i18n'
 
-type Suggestion = { text: string; original: string; topic: string; questions: string[] }
-export default function NarrativeRefinement({ topic, text, start, apply, children }: {
-  children?: ReactNode; topic: string; text: string; start: () => Promise<string>; apply: (text: string) => void
+type Suggestion = { revision?: number; text: string; original: string; topic: string; questions: string[] }
+export default function NarrativeRefinement({ topic, text, start, apply, children, value = text, buttonLabel, compact = false, disabled = false, sourceRevision }: {
+  sourceRevision?: number; value?: string; buttonLabel?: string; compact?: boolean; disabled?: boolean; children?: ReactNode; topic: string; text: string; start: () => Promise<string>; apply: (text: string) => void
 }) {
   const { t, error: translate } = useLocale()
   const [job, setJob] = useState('')
@@ -33,17 +33,17 @@ export default function NarrativeRefinement({ topic, text, start, apply, childre
     void poll()
     return () => { cancelled = true; clearTimeout(timer) }
   }, [job])
-  const stale = suggestion && (suggestion.original !== text || suggestion.topic !== topic)
-  return <div className="narrative-refinement">
+  const stale = suggestion && (suggestion.original !== text || suggestion.topic !== topic || sourceRevision !== undefined && suggestion.revision !== sourceRevision)
+  return <div className={`narrative-refinement${compact ? ' compact-refinement' : ''}`}>
     <div className="refinement-editor">{children}<div className="refinement-controls">
-    <Button variant="secondary" busy={busy} disabled={busy || !text.trim()} onClick={async () => {
+    <Button variant="secondary" busy={busy} disabled={disabled || busy || !text.trim()} onClick={async () => {
       setBusy(true); setError(''); setSuggestion(null)
       try { setJob(await start()) } catch (e) { setError(translate(e instanceof ApiError ? e.code : 'NETWORK_ERROR')); setBusy(false) }
-    }}>{t('AI 优化描述', 'Refine with AI')}</Button>
-    <p className="field-hint">{t('调用已配置的 OpenRouter 模型，围绕当前主题适度拓展和优化需求；新增建议标为待确认，采纳前请审查。', 'Uses your configured OpenRouter model to moderately expand and refine this topic. New proposals are marked for confirmation; review before accepting.')}</p>
-    {undo && <Button variant="secondary" disabled={text !== undo.after} onClick={() => { apply(undo.before); setUndo(null) }}>{t('撤销本次采纳', 'Undo acceptance')}</Button>}
+    }}>{buttonLabel ?? t('AI 优化描述', 'Refine with AI')}</Button>
+    <p className="field-hint">{compact ? t('基于功能简述和已有说明扩写，审阅采纳后写入。', 'Expands the brief and existing description. Review before accepting.') : t('调用已配置的 OpenRouter 模型，围绕当前主题适度拓展和优化需求；新增建议标为待确认，采纳前请审查。', 'Uses your configured OpenRouter model to moderately expand and refine this topic. New proposals are marked for confirmation; review before accepting.')}</p>
+    {undo && <Button variant="secondary" disabled={disabled || value !== undo.after} onClick={() => { apply(undo.before); setUndo(null) }}>{t('撤销本次采纳', 'Undo acceptance')}</Button>}
     </div></div>
-    <aside className="refinement-results paper-panel" aria-label={t('AI 优化结果', 'AI refinement result')} aria-live="polite" aria-busy={busy}>
+    {(!compact || busy || suggestion || error) && <aside className="refinement-results paper-panel" aria-label={t('AI 优化结果', 'AI refinement result')} aria-live="polite" aria-busy={busy}>
     <h3>{t('AI 优化建议 · 待你确认', 'AI suggestion · Awaiting your review')}</h3>
     {!suggestion && !error && <p className="field-hint">{busy ? t('正在优化描述，结果将在这里展示…', 'Refining your notes. The result will appear here…') : t('在左侧填写描述，点击下方「AI 优化描述」，在这里审阅结果后再采纳。', 'Enter notes on the left and choose Refine with AI below. Review the result here before accepting.')}</p>}
     {error && <Notice error>{error}</Notice>}
@@ -52,11 +52,11 @@ export default function NarrativeRefinement({ topic, text, start, apply, childre
       <p style={{ whiteSpace: 'pre-wrap' }}>{suggestion.text}</p>
       {!!suggestion.questions.length && <><h4>{t('待澄清问题（不会写入描述）', 'Clarifications (not inserted into your notes)')}</h4><ul>{suggestion.questions.map((q, i) => <li key={i}>{q}</li>)}</ul></>}
       {stale && <Notice>{t('原文已修改，请重新优化；旧建议不能覆盖当前内容。', 'Your text changed. Request a new suggestion; this result cannot overwrite it.')}</Notice>}
-      <div className="stage-actions"><Button disabled={!!stale} onClick={() => {
+      <div className="stage-actions"><Button disabled={disabled || !!stale} onClick={() => {
         if (stale) return
-        setUndo({ before: text, after: suggestion.text }); apply(suggestion.text); setSuggestion(null)
+        setUndo({ before: value, after: suggestion.text }); apply(suggestion.text); setSuggestion(null)
       }}>{t('采纳并替换描述', 'Accept and replace')}</Button><Button variant="secondary" onClick={() => setSuggestion(null)}>{t('保留原文', 'Keep original')}</Button></div>
     </div>}
-    </aside>
+    </aside>}
   </div>
 }

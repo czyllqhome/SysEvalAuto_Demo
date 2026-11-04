@@ -584,3 +584,21 @@ it('opens grading directly from every earlier questionnaire page after saving', 
   expect(writes).toHaveLength(1)
   expect(writes[0].answers).toMatchObject(demoFixture.template.answers)
 })
+
+
+it('edits and saves functions and scenarios as separate entries', async () => {
+  const writes = setup({ answers: { system_functions: '查询库存\n导出报表', system_scenarios: '门店盘点' } })
+  await screen.findByText('从系统事实，到有依据的初步定级')
+  expect(screen.getByLabelText('功能 2')).toHaveValue('导出报表')
+  fireEvent.click(screen.getByRole('button', { name: '添加功能' }))
+  fireEvent.change(screen.getByLabelText('功能 3'), { target: { value: '审批请求' } })
+  fireEvent.click(screen.getByRole('button', { name: '移除 功能 2' }))
+  fireEvent.click(screen.getByRole('button', { name: '添加场景' }))
+  fireEvent.change(screen.getByLabelText('场景 2'), { target: { value: '月末对账' } })
+  fireEvent.click(screen.getByText('保存草稿'))
+  await waitFor(() => expect(writes).toHaveLength(1))
+  expect(writes[0].answers).toMatchObject({
+    system_functions: '查询库存\n审批请求',
+    system_scenarios: '门店盘点\n月末对账',
+  })
+})

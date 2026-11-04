@@ -426,8 +426,8 @@
     "source_id": "B06",
     "example_zh": "按当前系统实际情况选择，可多项时仅勾选已核实内容；尚未确认请选择不确定。",
     "example_en": "Choose verified facts for this system; use Unknown for unconfirmed information.",
-    "policy_hint_zh": "Amer Sports 内部等级下限：仅经 VPN/零信任接入为 3 级，受控互联网入口为 2 级，公众可访问入口为 1 级。",
-    "policy_hint_en": "Amer Sports internal minimum: VPN/zero-trust only = level 3; controlled internet ingress = level 2; public ingress = level 1."
+    "policy_hint_zh": "Amer Sports 内部等级下限：无公网访问为 1 级，受控互联网入口或公众可访问入口最低为 2 级，仅经 VPN/零信任接入为 3 级。",
+    "policy_hint_en": "Amer Sports internal minimum: no internet ingress = level 1; controlled or public internet ingress = at least level 2; VPN/zero-trust only = level 3."
   },
   {
     "id": "B07",

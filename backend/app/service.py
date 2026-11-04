@@ -29,7 +29,7 @@ def system_for(db, user, system_id: str, *, write=False):
     if write:
         statement = statement.with_for_update()
     system = db.scalar(statement)
-    if system is None:
+    if system is None or system.draft.get('deleted_at'):
         raise DomainError("NOT_FOUND", 404)
     if user.role != 'vendor':
         caps = access.capabilities(db, user, system)
@@ -90,6 +90,12 @@ def selection_view(selection):
 
 
 def current_catalog(db, org_id):
+    from .db import SixFieldLibrary
+    if db.get(SixFieldLibrary, org_id):
+        from .db import LibraryWorkspace
+        active = db.get(LibraryWorkspace, org_id)
+        if not active or not active.published_id:
+            raise DomainError('CATALOG_NOT_AVAILABLE', 409)
     from .db import LibraryWorkspace
     workspace = db.get(LibraryWorkspace, org_id)
     catalog = db.get(Catalog, workspace.published_id) if workspace and workspace.published_id else None
@@ -261,6 +267,19 @@ def match_profile_controls(db, system):
 
 
 def job_input(db, system, kind):
+    if isinstance(kind, str) and kind.startswith('function_expansion:'):
+        require_state(system, 'DRAFT', 'CLASSIFYING', 'CONTEXT_REVIEW', 'CONTROL_REVIEW', 'PRD_REVIEW')
+        context = system.draft.get('proposal') or system.context
+        function = next((f for f in context.get('functions', []) if isinstance(f, dict) and isinstance(f.get('id'), str) and digest(f['id'])[:16] == kind.split(':', 1)[1]), None)
+        from .domain import ContextItem
+        try:
+            function = ContextItem.model_validate(function).model_dump()
+        except ValueError as exc:
+            raise DomainError('INVALID_FIELDS') from exc
+        if not function['title'].strip():
+            raise DomainError('INVALID_FIELDS')
+        return {'topic': 'function_expansion', 'function_id': function['id'],
+                'text': function['title'] + '\n\n' + function.get('description', ''), 'revision': system.revision}
     if kind == 'prd_import_extraction':
         from .prd_imports import source
         return source(db, system)
@@ -281,12 +300,14 @@ def job_input(db, system, kind):
         return {"name": system.name, "draft": {"blocks": system.draft.get("blocks", {})},
                 "classification": system.classification, "questionnaire": evidence}
     if kind == "prd_generation":
+        from .topology import snapshot as topology_snapshot
         from .db import AssessmentProfile
         profile = db.get(AssessmentProfile, system.id)
         trace = profile.data.get('remediation_source') if profile else None
         return {"name": system.name, "revision": system.revision, "context": system.context,
                 "context_revision_id": system.context_revision_id, "classification": system.classification,
                 "controls": [item.snapshot for item in selections(db, system, included_only=True)], "questionnaire": evidence,
+                "network_topology": topology_snapshot(db, system.id),
                 **({'remediation_source': trace} if trace else {})}
     if kind == "impact_analysis":
         round_ = db.get(SupplierRound, system.round_id) if system.round_id else None
@@ -299,7 +320,7 @@ def job_input(db, system, kind):
 
 
 def schedule(db, system, kind, mode, language, *, reparse=False):
-    if isinstance(kind, str) and (kind.startswith('narrative_refinement:') or kind == 'prd_import_extraction') and mode != 'openrouter':
+    if isinstance(kind, str) and (kind.startswith(('narrative_refinement:', 'function_expansion:')) or kind == 'prd_import_extraction') and mode != 'openrouter':
         raise DomainError('INVALID_GENERATION_MODE')
     if mode not in ("local", "openrouter") or language not in ("zh", "en"):
         raise DomainError("INVALID_GENERATION_MODE")
@@ -358,11 +379,13 @@ def publish_job(db, system, job, output):
     if job.kind == 'prd_import_extraction':
         from .prd_imports import publish
         publish(db, system, job, output)
-    elif job.kind.startswith('narrative_refinement:'):
+    elif job.kind.startswith(('narrative_refinement:', 'function_expansion:')):
         suggestion = NarrativeSuggestion.model_validate(output).model_dump()
         if not suggestion['text'].strip() or any(not q.strip() or len(q) > 1000 for q in suggestion['questions']):
             raise DomainError('INVALID_MODEL_OUTPUT')
-        job.output = {**suggestion, 'topic': job.input['topic'], 'original': job.input['text'],
+        if job.kind.startswith('function_expansion:') and len(suggestion['text']) > 4000:
+            raise DomainError('INVALID_MODEL_OUTPUT')
+        job.output = {**suggestion, 'revision': job.input.get('revision'), 'topic': job.input['topic'], 'original': job.input['text'],
                       'prompt_version': 'narrative-R2'}
     elif job.kind == "context_organization":
         proposal = Context.model_validate(output).model_dump()
@@ -377,7 +400,9 @@ def publish_job(db, system, job, output):
         data = validate_prd(output, job.input["context"], job.input["controls"])
         from . import prd_templates
         pinned = job.usage.get('prd_template')
-        markdown = render_prd(data, {**job.input, 'generation_mode': job.mode}, job.language, pinned)
+        from .topology import embed
+        source = {**job.input, 'generation_mode': job.mode, 'network_topology': embed(db, system.id, job.input.get('network_topology', []))}
+        markdown = render_prd(data, source, job.language, pinned)
         prd = Prd(system_id=system.id, revision=system.revision, language=job.language, mode=job.mode,
                   data=data, markdown=markdown, content_hash=digest({"data": data, "markdown": markdown, "renderer": "R1"}))
         db.add(prd)
@@ -433,6 +458,10 @@ def review_report(db, system, payload):
             raise DomainError("REVIEW_INCOMPLETE")
     if not str(payload.get("exception_reason", "")).strip():
         raise DomainError("EXCEPTION_REVIEW_REQUIRED")
+    from .source_risk import assessment
+    blocked = set(assessment(db, system)['blocking_requirements'])
+    if any(f['requirement_id'] in blocked and decisions[f['id']]['decision'] == 'accept' for f in report.data['findings']):
+        raise DomainError('HIGH_RISK_CONTROL_UNRESOLVED', 409)
     report.decisions = {**decisions, "_exceptions": {"reason": payload["exception_reason"]}}
     report.reviewed = True
     system.status = "NEGOTIATING" if any(d["decision"] == "changes" for d in decisions.values()) else "RESULT_REVIEW"
@@ -452,6 +481,8 @@ def baseline_payload(db, system):
 
 
 def freeze_baseline(db, system):
+    from .source_risk import require_passable
+    require_passable(db, system)
     require_state(system, "RESULT_REVIEW")
     report = db.get(Report, system.report_id)
     if not report or not report.reviewed or any(
@@ -467,6 +498,8 @@ def freeze_baseline(db, system):
 
 def confirm_baseline(db, system, baseline, user, content_hash):
     require_state(system, "FINAL_CONFIRMATION", "PENDING_DEVELOPMENT")
+    from .source_risk import require_passable
+    require_passable(db, system)
     validate_current_baseline(baseline.id, system.baseline_id, baseline.content_hash, content_hash)
     if user.role != "vendor" and user.id == system.owner_id:
         party = "customer"
@@ -489,6 +522,8 @@ def finalize(db, system, baseline, user):
     if baseline.finalized and system.status == "PENDING_DEVELOPMENT":
         return
     require_state(system, "FINAL_CONFIRMATION")
+    from .source_risk import require_passable
+    require_passable(db, system)
     confirmations = list(db.scalars(select(Confirmation).where(Confirmation.baseline_id == baseline.id)))
     validate_confirmations(confirmations, baseline.content_hash, ("customer", "supplier"))
     if digest(baseline_payload(db, system)) != baseline.content_hash:
@@ -499,11 +534,15 @@ def finalize(db, system, baseline, user):
 
 
 def system_view(db, system, user):
+    from .source_risk import assessment as source_assessment
     from .assessment_creation import profile_view
     info = {"id": system.id, "name": system.name, "status": system.status, "version": system.version,
             "revision": system.revision, "updated_at": system.updated_at, "created_at": system.created_at,
             "classification": system.classification, "context": system.context, "draft": system.draft,
             "context_revision_id": system.context_revision_id}
+    if user.role != 'vendor':
+        from .topology import snapshot as topology_snapshot
+        info['network_topology'] = topology_snapshot(db, system.id)
     info.update(profile_view(db, system))
     prd = db.get(Prd, system.prd_id) if system.prd_id else None
     round_ = db.get(SupplierRound, system.round_id) if system.round_id else None
@@ -538,6 +577,7 @@ def system_view(db, system, user):
                       "supplier_org_id": round_.supplier_org_id} if round_ else None,
             "report": {"id": report.id, "data": report.data, "mode": report.mode,
                        "mlps3_major_risk": mlps3_major_risk(db, system, prd, report),
+                       "source_assessment": source_assessment(db, system),
                        "control_originals": impact_control_originals(db, system, prd),
                        "reviewed": report.reviewed, "decisions": report.decisions} if report else None,
             "baseline": {"id": baseline.id, "content_hash": baseline.content_hash, "finalized": baseline.finalized,

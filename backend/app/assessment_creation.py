@@ -45,22 +45,12 @@ def create_assessment(db, user, body):
             date.fromisoformat(data['as_of'])
         except ValueError as exc:
             raise DomainError('INVALID_FIELDS') from exc
-    predecessor = body.get('predecessor_id')
-    if predecessor:
-        from .service import system_for
-        previous = system_for(db, user, predecessor)
-        if 'manage' not in access.capabilities(db, user, previous):
-            raise DomainError('FORBIDDEN', 403)
-    asset_id = None
-    if predecessor:
-        old_profile = db.get(AssessmentProfile, predecessor)
-        asset_id = old_profile.asset_id if old_profile else None
-    elif body.get('asset_id'):
-        raise DomainError('INVALID_FIELDS')
+    if body.get('predecessor_id') or body.get('asset_id'):
+        raise DomainError('INVALID_FIELDS', 422)
     system = System(org_id=user.org_id, owner_id=user.id, name=required_text(body, 'name'), draft={'blocks': {}})
     db.add(system)
     db.flush()
-    db.add(AssessmentProfile(system_id=system.id, kind=kind, asset_id=asset_id, predecessor_id=predecessor, data=data))
+    db.add(AssessmentProfile(system_id=system.id, kind=kind, data=data))
     db.add(Audit(system_id=system.id, actor_id=user.id, action='system.created'))
     return system
 

@@ -110,8 +110,7 @@ class Context(StrictModel):
 
 def validate_context(data: dict) -> dict:
     context = Context.model_validate(data).model_dump()
-    if not all((context["summary"], context["functions"], context["departments"],
-                context["roles"], context["owner_role"], context["scope"])):
+    if not context["functions"]:
         raise DomainError("CONTEXT_INCOMPLETE")
     if any(not name.strip() for name in context["departments"] + context["roles"]):
         raise DomainError("CONTEXT_INCOMPLETE")

@@ -171,3 +171,15 @@
 .mlps-intake .grade-reference-controls > select { width: 100%; font-size: 18px; line-height: 1.6; }
 
 .grade-dimension-totals > .grade-reference-controls { min-width: 0; margin: 0; padding: 14px 0 0; border: 0; border-top: 2px solid #dbe7fa; border-radius: 0; align-self: start; }
+
+.mlps-narrative-item { display: flex; gap: 8px; align-items: center; }
+.mlps-narrative-item > input { flex: 1; min-width: 0; }
+
+/* Grading evidence cards pair authored answers and computed grades above the scale. */
+.grade-score-card h4 { line-height: 1.6; overflow-wrap: anywhere; }
+.grade-score-answer, .grade-score-level { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.grade-score-answer { flex: 1; overflow-wrap: anywhere; }
+.grade-score-level { text-align: right; flex: 0 1 auto; }
+.grade-score-reading small { color: #63748d; font-size: 12px; }
+.grade-score-answer b { font-size: 16px; line-height: 1.5; }
+@media (max-width: 600px) { .grade-score-reading { flex-wrap: wrap; align-items: flex-start; } }

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import Markdown from 'react-markdown'
+import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Button, Notice } from './components'
 import { useLocale } from './i18n'
@@ -20,10 +20,10 @@ export default function PrdPreview({ systemId, prdId }: { systemId: string; prdI
   if (document.isPending) return <p role="status">{t('正在加载 PRD 文档…', 'Loading PRD document…')}</p>
   if (document.error) return <Notice error>{t('PRD 预览加载失败，请重试或下载文档。', 'Could not load the PRD preview. Retry or download the document.')}<Button variant="secondary" onClick={() => void document.refetch()}>{t('重试', 'Retry')}</Button></Notice>
   return <div className="prd-markdown" aria-label={t('PRD 模板预览', 'PRD template preview')}>
-    <Markdown remarkPlugins={[remarkGfm]} skipHtml components={{
+    <Markdown urlTransform={(url, key) => key === 'src' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(url) ? url : defaultUrlTransform(url)} remarkPlugins={[remarkGfm]} skipHtml components={{
       table: ({ children }) => <div className="table-scroll"><table>{children}</table></div>,
       a: ({ href, children }) => <a href={href} target={href?.startsWith('#') ? undefined : '_blank'} rel="noopener noreferrer">{children}</a>,
-      img: ({ alt }) => <span className="field-hint">{t('图片：', 'Image: ')}{alt}</span>,
+      img: ({ src, alt }) => src && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src) ? <img className="network-topology-image" src={src} alt={alt ?? t('网络拓扑图', 'Network topology diagram')} loading="lazy" /> : <span className="field-hint">{t('图片：', 'Image: ')}{alt}</span>,
     }}>{document.data}</Markdown>
   </div>
 }

@@ -46,3 +46,53 @@ Only MLPS Level 2 and Level 3 are offered. The two CN workbooks provide 346 cont
 2026-11-03：首页及空台账创建入口统一为“新建系统安全评估 / Create system security assessment”。打开统一创建窗口后，在“系统类型”选择“待开发系统”或“现有系统”；现有系统继续填写范围、基准日期、部署环境、版本及原因。底层 new/existing 类型和评估流程保持兼容。
 
 创建窗口使用“待评估系统名称 / System name to assess”，不再包含示例预填选项和历史保留说明。需要 Demo 数据时，在后续“系统信息录入”页面使用现有 Demo 填入操作。
+
+## 2026-11-04: Six-field replacement control source / 六字段控制来源
+
+本次切换的组织使用 `CONTROL-SIX/1`：`source`, `control_identifier`, `security_domain`,
+`security_control_point`, `control_requirement`, `risk_level`。旧控制业务结构退出该组织当前库，
+历史发布、评估选择快照、PRD 及基线引用不删除。切换前必须 SQLite backup。
+新增表 `six_field_control_libraries`、`six_field_control_uploads`、`six_field_controls`；
+部署迁移 `six_field_controls`，本地启动自动创建。六字段为独立列，上传原文件字节、SHA-256、
+上传者、工作表和物理行号另存为来源元数据，不再要求 assessment_procedure 或 label。
+
+`GET /api/v1/source-controls` 供客户组织读取，`POST /api/v1/source-controls/uploads` 仅 admin 可用，
+沿用 CSRF。支持 UTF-8 CSV / XLSX，以列名读取，允许重排列顺序，正文空白与换行原样保存。
+六列全部必填；每文件最多 10 MiB、10,000 条；重复 source + control_identifier 拒绝整文件，
+重复文件哈希幂等返回。多文件界面按文件逐一提交，前一文件成功不因后一文件失败而回滚。
+宏、公式、外部链接及无效表头通过现有有界 Excel 校验拒绝。
+
+切换标记阻止旧内置 CN 控制在重启时恢复，当前匹配库保持未发布，旧评估仍保留已固定来源。
+新六字段只读写来源，不推断 risk_level 的 MLPS 等级含义；三文件所属等级/版本及适用范围映射
+需要用户确认后接入新评估匹配。界面明确显示待配置状态，不制造验收步骤。
+
+The switched organization uses six explicit source columns and a new upload store. Old
+releases are archival references only; historical assessment evidence and baseline hashes
+remain intact. Upload is admin-only, file-atomic and hash-idempotent. Applicability mapping
+is deliberately pending confirmation of the three source files and the meaning of risk_level.
+
+## 2026-11-04: Three MLPS source files and High-risk supplier gate
+
+已确认 MLPS_level_1_CN / level_2_CN / level_3_CN 分别关联 1/2/3 级；工作表名不作为等级依据。
+新 `six_field_level_mappings` 表记录文件等级，迁移 `six_field_levels`。上传时可显式选级，
+规范文件名自动识别；选择等级与规范文件名矛盾时拒绝。risk_level 不参与系统定级或底稿选级。
+六字段源数据保持原样，兼容发布由来源行派生，稳定身份使用 source + control_identifier。
+MLPS1_REFERENCE 单独提供一级条款，不用内部基础控制集冒充一级底稿。新发布使用 MLPS-SIX，
+上传和发布在同一事务；旧评估仍固定原 catalog，问卷中显式“加载最新控制库”后保存并重新确认才能升级。
+
+用户提供的三文件为 55 / 135 / 211 条。High 分别为 0 / 16 / 63 条。
+一级文件的工作表名为 MLPS Level 3 CN，等级按已确认文件名保存；三级 Medium 拼为 Meduim，保留原文。
+来源没有 assessment_procedure，不生成伪造测评步骤。规则 PRD 中验收方法明确标记需双方细化。
+
+供应商轮次固定所选控制来源快照，规则读取不可变提交而非可编辑草稿。
+新增 `source_risk.py`：来源 risk_level（不区分大小写）为 High，答复 no 时直接判定 failed；
+partial / needs_clarification / 缺失时为 pending 并阻止通过。其他风险等级仍走人工审查，
+不能仅因模型 finding.severity=high 就触发六字段来源 High 硬拦截。
+High 问题不能接受风险绕过；评审接受、冻结、双方确认和最终待开发入口都有后端检查。
+模型改写风险严重度或当前库更新均不改变已固定的 High 规则。历史基线与独立同哈希确认保持不变。
+
+English: file level and source risk are independent. The three six-field sources publish
+immutable MLPS1/2/3 reference catalogs. High + unable fails supplier security assessment;
+unresolved High commitments block acceptance and baseline progression. Evidence-based
+customer acceptance still follows feasibility commitments. No assessment procedures are
+fabricated from the six-column source. Historical assessments explicitly opt into new releases.

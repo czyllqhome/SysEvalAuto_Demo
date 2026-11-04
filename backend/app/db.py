@@ -478,3 +478,43 @@ class AISettings(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     data: Mapped[dict] = mapped_column(JSON, default=dict)
     __mapper_args__ = {"version_id_col": version}
+
+class SixFieldLibrary(Base):
+    __tablename__ = 'six_field_control_libraries'
+    org_id: Mapped[str] = mapped_column(ForeignKey('organizations.id'), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    archived_catalog_id: Mapped[str | None] = mapped_column(ForeignKey('catalogs.id'), nullable=True)
+    __mapper_args__ = {'version_id_col': version}
+
+
+class SixFieldUpload(Base):
+    __tablename__ = 'six_field_control_uploads'
+    __table_args__ = (UniqueConstraint('org_id', 'sha256'),)
+    id: Mapped[str] = mapped_column(primary_key=True, default=uid)
+    org_id: Mapped[str] = mapped_column(ForeignKey('organizations.id'), index=True)
+    actor_id: Mapped[str] = mapped_column(ForeignKey('users.id'))
+    filename: Mapped[str] = mapped_column(String(200))
+    sha256: Mapped[str] = mapped_column(String(64))
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+
+
+class SixFieldControl(Base):
+    __tablename__ = 'six_field_controls'
+    __table_args__ = (UniqueConstraint('org_id', 'source', 'control_identifier'),)
+    id: Mapped[str] = mapped_column(primary_key=True, default=uid)
+    org_id: Mapped[str] = mapped_column(ForeignKey('organizations.id'), index=True)
+    upload_id: Mapped[str] = mapped_column(ForeignKey('six_field_control_uploads.id'))
+    source: Mapped[str] = mapped_column(String(200))
+    control_identifier: Mapped[str] = mapped_column(String(200))
+    security_domain: Mapped[str] = mapped_column(Text)
+    security_control_point: Mapped[str] = mapped_column(Text)
+    control_requirement: Mapped[str] = mapped_column(Text)
+    risk_level: Mapped[str] = mapped_column(String(200))
+    sheet: Mapped[str] = mapped_column(String(100))
+    row_number: Mapped[int] = mapped_column(Integer)
+
+class SixFieldLevelMapping(Base):
+    __tablename__ = 'six_field_level_mappings'
+    upload_id: Mapped[str] = mapped_column(ForeignKey('six_field_control_uploads.id'), primary_key=True)
+    level: Mapped[int] = mapped_column(Integer)
