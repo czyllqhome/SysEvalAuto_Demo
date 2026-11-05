@@ -107,6 +107,19 @@ def test_complete_reopen_and_source_invalidation(owner):
     r = client.post(f"/api/v1/delivery-items/{item['id']}/reopen", json={'version': item['version'], 'reason': 'New failure observed'})
     assert r.status_code == 200
     assert r.json()['status'] == 'ACTIVE'
+    reopened = next(i for i in r.json()['items'] if i['id'] == item['id'])
+    assert reopened['reopen_feedback']['reason'] == 'New failure observed'
+    assert reopened['submissions'][-1]['review']['decision'] == 'PASS'
+    supplier_item = vendor.get(f"/api/v1/delivery-items/{item['id']}").json()
+    assert supplier_item['reopen_feedback'] == reopened['reopen_feedback']
+    assert all(i['reopen_feedback'] is None for i in r.json()['items'] if i['id'] != item['id'])
+    r = vendor.post(f"/api/v1/delivery-items/{item['id']}/submissions", json={
+        'version': reopened['version'], 'expected_source_hash': batch['source_hash'],
+    })
+    assert r.status_code == 200, r.text
+    resubmitted = next(i for i in r.json()['items'] if i['id'] == item['id'])
+    assert resubmitted['reopen_feedback'] is None
+    assert resubmitted['submissions'][0] == reopened['submissions'][0]
     with app.state.sessions() as db:
         db.get(System, sid).revision += 1
         db.commit()

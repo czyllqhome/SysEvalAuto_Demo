@@ -51,7 +51,7 @@ def test_submit_only_publishes_and_returns_pinned_risk_summary(owner, monkeypatc
     assert result['submission_id'] == submitted['submission_id']
     assert result['counts'] == {'total': len(requirements), 'yes': len(requirements) - 3,
         'no': 1, 'partial': 1, 'needs_clarification': 1, 'unanswered': 0, 'attention': 3,
-        'high_unconfirmed': 2, 'medium_unconfirmed': 1}
+        'high_unconfirmed': 2, 'medium_unconfirmed': 1, 'owner_accepted': 0, 'accepted_previous': 0}
     first = next(i for i in result['items'] if i['requirement_id'] == targets[0]['id'])
     assert first['source_risk'] == 'high'
     assert first['domains'] == ['Published domain']

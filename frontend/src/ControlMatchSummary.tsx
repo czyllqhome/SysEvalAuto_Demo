@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { Control, SystemDetail } from './types'
 import { useLocale } from './i18n'
-import './control-match-summary.css'
 
 function isRuleExcluded(c: Control) {
   return !c.included && !c.reason?.trim() && c.origin !== 'candidate' && c.match?.status === 'inapplicable'

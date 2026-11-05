@@ -1,6 +1,6 @@
 import { AuthContext } from './components'
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { LocaleProvider } from './i18n'
@@ -87,4 +87,34 @@ it('loads every catalog page before filtering and keeps all selected cloud contr
   fireEvent.change(screen.getByLabelText('选择状态'), { target: { value: 'excluded' } })
   expect(screen.getByRole('table', { name: '其他域' }).querySelectorAll('tbody tr')).toHaveLength(97)
   expect(requested).toEqual([1, 2])
+})
+
+it.each([false, true])('bounds parallel catalog loading and handles navigation away (%s)', async leave => {
+  localStorage.setItem('control-layout', 'rows')
+  const controls = Array.from({ length: 410 }, (_, i) => ({ id: `c${i}`, code: `C${i}`, domain: 'cloud', levels: ['L2'], required: true, catalog_id: 'pinned', included: i === 0 || i === 409, origin: 'matched', translations: { zh: { title: `控制${i}`, description: `要求${i}`, verification: '核对' } } }))
+  const detail = { system: { id: 's1', name: 'Test', revision: 1, context: {}, draft: {}, created_at: 1, updated_at: 1, version: 1, status: 'CONTROL_REVIEW', context_revision_id: 'context', classification: { effective_level: 'L2', catalog_id: 'pinned' } }, controls, permissions: ['read'], prd: null, round: null, report: null, baseline: null } as SystemDetail
+  const requested: number[] = [], signals: AbortSignal[] = []
+  const complete: Record<number, () => void> = {}
+  vi.stubGlobal('fetch', vi.fn((url: string, options: RequestInit) => {
+    const page = Number(new URL(url, 'http://localhost').searchParams.get('page'))
+    requested.push(page)
+    signals.push(options.signal as AbortSignal)
+    const response = () => new Response(JSON.stringify({ items: controls.slice((page - 1) * 100, page * 100), total: controls.length, domain_labels: { cloud: ['云计算安全扩展要求', 'Cloud'] } }))
+    return page >= 2 && page <= 4 ? new Promise<Response>(resolve => { complete[page] = () => resolve(response()) }) : Promise.resolve(response())
+  }))
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const mounted = render(<QueryClientProvider client={client}><MemoryRouter><LocaleProvider><AuthContext.Provider value={{ user: { id: 'u', name: 'Reader', email: 'reader@example.com', org_id: 'org', role: 'member' }, csrf: '', model_configured: false }}><ControlsPanel detail={detail} /></AuthContext.Provider></LocaleProvider></MemoryRouter></QueryClientProvider>)
+  await waitFor(() => expect(requested).toEqual([1, 2, 3, 4]))
+  expect(screen.queryByText('控制0')).not.toBeInTheDocument()
+  if (leave) mounted.unmount()
+  await act(async () => { complete[4](); complete[3](); complete[2]() })
+  if (leave) {
+    expect(signals.every(signal => signal.aborted)).toBe(true)
+    expect(requested).toEqual([1, 2, 3, 4])
+  } else {
+    await screen.findByText('控制409')
+    expect(requested).toEqual([1, 2, 3, 4, 5])
+    expect(screen.getByRole('table', { name: '云计算安全扩展要求' }).querySelectorAll('tbody tr')).toHaveLength(2)
+  }
+  client.clear()
 })

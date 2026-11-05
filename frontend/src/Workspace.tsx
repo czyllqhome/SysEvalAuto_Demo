@@ -20,7 +20,7 @@ export function stageTab(status: string, vendor = false, _hasDescription = true)
   if (vendor && status === 'VENDOR_FILLING') return 'supplier'
   return ({ DRAFT: 'classification', CLASSIFYING: 'classification', CONTEXT_REVIEW: 'information', CONTROL_REVIEW: 'controls',
     PRD_GENERATING: 'prd', PRD_REVIEW: 'prd', VENDOR_FILLING: 'supplier', ANALYZING: 'impact',
-    RESULT_REVIEW: 'impact', NEGOTIATING: 'impact', FINAL_CONFIRMATION: 'agreement', PENDING_DEVELOPMENT: 'agreement' } as Record<string, string>)[status] ?? 'unavailable'
+    RESULT_REVIEW: 'impact', NEGOTIATING: 'impact', FINAL_CONFIRMATION: 'agreement', PENDING_DEVELOPMENT: 'delivery' } as Record<string, string>)[status] ?? 'unavailable'
 }
 export default function Workspace() {
   const { id = '', tab } = useParams()
@@ -29,9 +29,9 @@ export default function Workspace() {
   const vendor = user.role === 'vendor'
   const navigate = useNavigate()
   const [historyOpen, setHistoryOpen] = useState(false)
-  const query = useQuery({ queryKey: ['system', id], queryFn: () => api<SystemDetail>(`/systems/${id}`),
-    refetchInterval: query => ['queued', 'running'].includes(query.state.data?.job?.state ?? '') ? 900 :
-      ['VENDOR_FILLING', 'ANALYZING', 'FINAL_CONFIRMATION', 'REMEDIATING'].includes(query.state.data?.system.status ?? '') ? 2500 : false })
+  const query = useQuery({ queryKey: ['system', id], queryFn: ({ signal }) => api<SystemDetail>(`/systems/${id}`, { signal }),
+    refetchInterval: query => query.state.error ? false : ['queued', 'running'].includes(query.state.data?.job?.state ?? '') ? 900 :
+      ['VENDOR_FILLING', 'ANALYZING', 'RESULT_REVIEW', 'NEGOTIATING', 'FINAL_CONFIRMATION', 'REMEDIATING'].includes(query.state.data?.system.status ?? '') ? 2500 : false })
   const history = useQuery({ queryKey: ['history', id, historyOpen], queryFn: () => api<{ id: string; action: string; created_at: number; detail: Record<string, unknown> }[]>(`/systems/${id}/history`), enabled: historyOpen && !vendor })
   if (query.isPending) return <Empty title={t('正在打开评估…', 'Opening assessment…')} />
   if (query.error || !query.data) return <Notice error>{error(query.error instanceof ApiError ? query.error.code : 'NOT_FOUND')}</Notice>
@@ -86,7 +86,7 @@ export default function Workspace() {
   return <><div className="workspace-breadcrumb"><Link to="/"><ArrowLeft size={14} />{t('返回评估台账', 'Back to assessments')}</Link><span className="mono">ASSESSMENT / {id.slice(0, 8).toUpperCase()}</span></div><header className="assessment-header"><div className="workspace-heading"><div><div className="title-overline"><Status status={displayedStatus} /><span className="mono muted">REV. {String(system.revision).padStart(2, '0')}</span></div><h1>{system.name}</h1>{!vendor && <SystemNameEditor detail={detail} />}<p>{system.context.departments?.join(' / ') || t('业务归属和责任将在应用梳理中明确。', 'Clarify departments and accountability in the application brief.')}</p></div><div className="workspace-heading-actions">{system.classification.effective_level && <div className={`large-level ${system.classification.effective_level}`}><span className="mono">{t('初步等级', 'PRELIMINARY')}</span><strong>{system.classification.effective_level}</strong></div>}{!vendor && <Button variant="secondary" onClick={() => setHistoryOpen(true)}><Clock3 size={16} />{t('变更记录', 'History')}</Button>}</div></div>
     <nav className={`workflow-nav${vendor ? ' supplier-workflow' : ''}`} aria-label={t('评估步骤', 'Assessment steps')}>{steps.map(([key, label], index) => <button key={key} aria-current={active === key ? 'step' : undefined} className={active === key ? 'active' : index < currentStep ? 'done' : ''} disabled={!available(key)} onClick={() => navigate(`/systems/${id}/${key}`)}><span>{index < currentStep && <Check size={13} />}{index + 1}</span>{label}</button>)}</nav><div id={`assessment-demo-actions-${id}`} className="assessment-demo-actions" /></header>
     {!summaryJob && <JobNotice detail={detail} />}{!vendor && detail.permissions?.length === 1 && <Notice>{t('你具有此评估的只读权限。', 'You have read-only access to this assessment.')}</Notice>}
-    <fieldset className="permission-fieldset" disabled={!vendor && !!detail.permissions && !detail.permissions.some(p => p !== 'read')}>{(steps.some(([key]) => key === active) ? panels[active] : null) ?? <Empty title={t('该步骤暂不可用', 'This step is not available yet')} />}</fieldset>
+    <fieldset className="permission-fieldset" disabled={active !== 'delivery' && !vendor && !!detail.permissions && !detail.permissions.some(p => p !== 'read')}>{(steps.some(([key]) => key === active) ? panels[active] : null) ?? <Empty title={t('该步骤暂不可用', 'This step is not available yet')} />}</fieldset>
     {active === 'supplier' && detail.round?.status === 'open' && <CsvExchange key={detail.round.version} detail={detail} kind="prd" />}
     {historyOpen && <Modal title={t('评估变更记录', 'Assessment history')} close={() => setHistoryOpen(false)} wide>{history.error && <Notice error>{t('无法读取记录。', 'Could not load the history.')}</Notice>}<div className="history-list">{history.data?.map(item => <div key={item.id}><span className="timeline-dot" /><div><strong>{auditLabels[item.action] ?? t('评估记录更新', 'Assessment record updated')}</strong><span className="mono muted">{new Date(item.created_at * 1000).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-GB')}</span></div><code>{item.action}</code></div>)}</div></Modal>}
   </>

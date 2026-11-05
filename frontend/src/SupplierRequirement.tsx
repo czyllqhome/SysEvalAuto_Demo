@@ -4,8 +4,9 @@ import { useLocale } from './i18n'
 import { answerNeedsAttention } from './supplierAnswers'
 import type { Answer, Requirement } from './types'
 
-export default function SupplierRequirement({ requirement, answer, answered, editable, complete, highRisk = false, update }: {
+export default function SupplierRequirement({ requirement, answer, answered, editable, complete, highRisk = false, update, feedback }: {
   requirement: Requirement; answer: Answer; answered: boolean; editable: boolean; complete: boolean; highRisk?: boolean; update: (value: Partial<Answer>) => void
+  feedback?: { finding_id: string; reason: string }[]
 }) {
   const { t } = useLocale()
   const [expanded, setExpanded] = useState(false)
@@ -21,6 +22,7 @@ export default function SupplierRequirement({ requirement, answer, answered, edi
     <header><code>{requirement.id}</code><h3>{requirement.title}</h3><span className={`supplier-response-status ${complete && !exception ? 'complete' : ''}`}>{responseLabel}</span></header>
     {highRisk && <span className="supplier-high-risk" title={t('本轮发布的来源控制标记为 High', 'A source control published in this round is marked High')}>{t('高风险', 'High risk')}</span>}
     <p className="preserve-lines">{requirement.description}</p>
+    {!!feedback?.length && <div className="supplier-owner-feedback"><strong>{t('负责人打回要求', 'Owner requested changes')}</strong>{feedback.map(item => <p className="preserve-lines" key={item.finding_id}>{item.reason}</p>)}<small>{t('请根据上述要求修改答复并重新提交。', 'Revise your response to address this feedback and submit again.')}</small></div>}
     <details className="supplier-acceptance"><summary>{t('验收条件与来源', 'Acceptance criteria and sources')}</summary><ul>{requirement.acceptance_criteria.map((c, i) => <li key={i}>{c}</li>)}</ul><div className="source-trace">{[...requirement.source_context_item_ids, ...requirement.source_control_ids].map(id => <code key={id}>{id}</code>)}</div></details>
     <fieldset disabled={!editable} className="supplier-response-choice"><legend className="sr-only">{t('供应商对本项 PRD 的承诺', 'Supplier commitment for this PRD item')}</legend>
       <CheckLabel checked={answer.implementation_status === 'yes'} onChange={checked => { update({ implementation_status: checked ? 'yes' : 'needs_clarification', ...(checked && answer.duration_workdays === 0 ? { duration_workdays: null } : {}) }); setExpanded(!checked) }}>{t('可以按本项要求完成', 'Can deliver this requirement')}</CheckLabel>

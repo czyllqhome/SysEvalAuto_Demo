@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useLocale } from './i18n'
 import guide from './control-exemption-guide.json'
-import './control-exemption-guide.css'
 
 export default function ControlExemptionGuide() {
   const { t, locale } = useLocale()

@@ -100,7 +100,7 @@ it('returns to login and removes business data from the cache on logout', async 
   }))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(['private-system'], { secret: 'customer-only-business-data' })
-  render(<QueryClientProvider client={client}><LocaleProvider><MemoryRouter><App /></MemoryRouter></LocaleProvider></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><LocaleProvider><MemoryRouter initialEntries={["/assessments"]}><App /></MemoryRouter></LocaleProvider></QueryClientProvider>)
   await screen.findByRole('button', { name: '退出登录' })
   fireEvent.click(screen.getByRole('button', { name: '退出登录' }))
   await waitFor(() => expect(screen.getByRole('button', { name: '登录工作空间' })).toBeVisible())
@@ -111,7 +111,7 @@ it('labels an administrator independently of the legacy owner type in both langu
   const adminSession = { ...session, user: { ...session.user, name: 'Administration', is_admin: true } }
   vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith('/auth/session') ? adminSession : []))))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><LocaleProvider><MemoryRouter><App /></MemoryRouter></LocaleProvider></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><LocaleProvider><MemoryRouter initialEntries={["/assessments"]}><App /></MemoryRouter></LocaleProvider></QueryClientProvider>)
   expect(await screen.findByText('Administration')).toBeVisible()
   expect(screen.getByText('系统管理员')).toBeVisible()
   expect(screen.queryByText('客户负责人')).not.toBeInTheDocument()
@@ -131,7 +131,7 @@ it.each([true, false])('restricts assessment deletion to admin=%s and confirms b
   })
   vi.stubGlobal('fetch', fetcher)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><LocaleProvider><MemoryRouter><App /></MemoryRouter></LocaleProvider></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><LocaleProvider><MemoryRouter initialEntries={["/assessments"]}><App /></MemoryRouter></LocaleProvider></QueryClientProvider>)
   await screen.findByText('Deletion target')
   if (!admin) { expect(screen.queryByRole('button', { name: '删除评估 Deletion target' })).not.toBeInTheDocument(); return }
   fireEvent.click(screen.getByRole('button', { name: '删除评估 Deletion target' }))

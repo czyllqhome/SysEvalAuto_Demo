@@ -57,11 +57,20 @@ def issue(db, user, system, kind, body):
         round_ = db.get(SupplierRound, system.round_id)
         supplier = round_.supplier_org_id
         rows = []
-        for requirement in db.get(Prd, round_.prd_id).data['requirements']:
+        from ..negotiation import scope
+        prd = db.get(Prd, round_.prd_id)
+        for requirement in prd.data['requirements']:
+            if requirement['id'] not in scope(round_, prd):
+                continue
+            feedback = '\n'.join(item['reason'] for item in round_.snapshot.get('owner_feedback', {}).get(requirement['id'], []))
             for field in ANSWER_FIELDS:
+                instructions = ('yes;partial;no;needs_clarification' if field == 'implementation_status'
+                                else 'Fill the supplier response / 填写供应商答复')
+                if feedback:
+                    instructions += '\n负责人整改要求 / Owner feedback: ' + feedback
                 rows.append({'id': requirement['id'] + '.' + field, 'question_id': requirement['id'], 'path': [field],
                              'question': requirement['title'], 'field': field,
-                             'instructions': 'yes;partial;no;needs_clarification' if field == 'implementation_status' else 'Fill the supplier response / 填写供应商答复',
+                             'instructions': instructions,
                              'allowed': ['yes', 'partial', 'no', 'needs_clarification'] if field == 'implementation_status' else None, 'multi': False})
         definition = {}
     existing = db.scalar(select(SupplierForm).where(SupplierForm.system_id == system.id, SupplierForm.kind == kind,
@@ -214,7 +223,8 @@ def confirm(db, user, system, form, body):
                                       'mapping_version': form.definition['mapping_version'], 'answers': batch.answers, 'action': 'draft'})
     else:
         round_ = db.get(SupplierRound, system.round_id)
-        round_.draft = batch.answers
+        from ..negotiation import merge_answers
+        round_.draft = merge_answers(round_, db.get(Prd, round_.prd_id), batch.answers)
         round_.version += 1
         system.version += 1
     batch.confirmed = True

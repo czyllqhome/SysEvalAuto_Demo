@@ -68,11 +68,16 @@ def test_high_gap_explicit_ai_uses_pinned_system_facts_and_requires_human_review
     assert not report['reviewed']
     command(client, sid, 'baselines', expected=422 if expected == 'ready_for_review' else 409)
     decisions = {f['id']: {'decision': 'accept', 'reason': 'Reviewed applicability and residual risk; verify isolation before release'} for f in report['data']['findings']}
-    command(client, sid, 'review-decisions', {'decisions': decisions, 'exception_reason': 'Reviewed'}, expected=200 if expected == 'ready_for_review' else 409)
-    if expected == 'ready_for_review':
-        baseline = command(client, sid, 'baselines').json()['baseline']
-        assert baseline['content_hash']
-        assert client.get(f"/api/v1/baselines/{baseline['id']}/document").status_code == 409
+    # A model rating never substitutes for explicit acceptance of source-High risk.
+    command(client, sid, 'review-decisions', {'decisions': decisions}, expected=409)
+    for finding in report['data']['findings']:
+        if finding['requirement_id'] == target['id']:
+            decisions[finding['id']]['owner_reviewed'] = True
+    accepted = command(client, sid, 'review-decisions', {'decisions': decisions}).json()
+    assert target['id'] in accepted['report']['source_assessment']['owner_accepted_requirements']
+    baseline = command(client, sid, 'baselines').json()['baseline']
+    assert baseline['content_hash']
+    assert client.get(f"/api/v1/baselines/{baseline['id']}/document").status_code == 409
 
 
 def test_contextual_risk_cannot_invent_system_evidence():

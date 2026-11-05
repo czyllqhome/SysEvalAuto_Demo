@@ -1,5 +1,4 @@
 import { useLocale } from './i18n'
-import './grading-method.css'
 
 export default function GradingMethod() {
   const { t } = useLocale()

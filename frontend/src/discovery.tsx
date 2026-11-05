@@ -32,18 +32,23 @@ export function ControlsPanel({ detail }: { detail: SystemDetail }) {
   const [exclude, setExclude] = useState<Control | null>(null), [reason, setReason] = useState('')
   const [bulkOpen, setBulkOpen] = useState(false), [bulkDomains, setBulkDomains] = useState<string[]>([]), [bulkReason, setBulkReason] = useState('')
   const { run, busy, error } = useCommand(detail)
-  const query = useQuery({ queryKey: ['controls', detail.system.id, domain, search, layout === 'rows' ? 'all' : page], queryFn: async () => {
+  const query = useQuery({ queryKey: ['controls', detail.system.id, detail.system.classification.catalog_id, domain, search, layout === 'rows' ? 'all' : page], queryFn: async ({ signal }) => {
     type ControlPage = { items: Control[]; total: number; domain_labels?: Record<string, [string, string]> }
-    const load = (number: number) => api<ControlPage>(`/controls?system_id=${detail.system.id}&domain=${encodeURIComponent(domain)}&q=${encodeURIComponent(search)}&page=${number}`)
+    const load = (number: number) => api<ControlPage>(`/controls?system_id=${detail.system.id}&domain=${encodeURIComponent(domain)}&q=${encodeURIComponent(search)}&page=${number}`, { signal })
     const first = await load(layout === 'rows' ? 1 : page)
     if (layout !== 'rows') return first
     // Complete the pinned catalog query before filtering/grouping so a domain is never split.
     const items = [...first.items]
-    for (let number = 2; items.length < first.total; number++) {
-      const next = await load(number)
-      if (!next.items.length) throw new Error('Incomplete control catalog')
-      items.push(...next.items)
+    const pages = Math.ceil(first.total / 100)
+    for (let number = 2; number <= pages; number += 3) {
+      signal.throwIfAborted()
+      const batch = await Promise.all(Array.from({ length: Math.min(3, pages - number + 1) }, (_, offset) => load(number + offset)))
+      for (const next of batch) {
+        if (!next.items.length || next.total !== first.total) throw new Error('Incomplete control catalog')
+        items.push(...next.items)
+      }
     }
+    if (items.length !== first.total) throw new Error('Incomplete control catalog')
     return { ...first, items }
   } })
   const domains = Object.keys(query.data?.domain_labels ?? {}).length ? query.data!.domain_labels! : domainNames

@@ -3,7 +3,6 @@ import { useId, useState } from 'react'
 import { useLocale } from './i18n'
 import { exemptionReason, isRuleExempted, isRuleInapplicable } from './ControlMatchSummary'
 import type { Control } from './types'
-import './control-domain-table.css'
 
 export function displayControlCode(control: Control) {
   const ref = control.metadata?.source_ref?.trim()

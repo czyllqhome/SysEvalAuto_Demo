@@ -2,7 +2,32 @@
 
 # 身份、项目角色与管理审计
 
-更新日期：2026-10-29。本文对应当前 `frontend/`、`backend/` 应用。
+## 当前 Demo 的 RBAC 职责矩阵（2026-11-05）
+
+管理员在左侧“配置 → RBAC 职责矩阵”（`/rbac`）查看六类角色的职责、授权范围和业务操作权限。
+页面提供中英文说明，以“可执行 / 有条件 / 不授予”区分权限，并可跳转“人员与权限”管理实际授权。
+入口和页面均限定管理员；非管理员直接访问仅显示无权查看。矩阵为只读参考，不调用业务写入或模型接口。
+
+当前 Demo 以组织角色和单个评估成员授权为准，取代下文历史项目授权操作步骤：
+
+| 角色 | 当前范围与职责 |
+| --- | --- |
+| 系统管理员 | 本组织全部评估、账号及组织角色、控制来源上传、AI/PRD 配置和管理审计；拥有全部客户方评估操作权限。 |
+| 负责人 | 可直接创建评估；仅管理自己创建或获管理授权的评估，可编辑、评审、分派普通成员、下发及进行客户方基线确认。 |
+| 经办人 | 按评估授权，填写问卷、调整控制范围、编辑 PRD 及核验/整改记录；不因此获得审批或基线确认权限。 |
+| 评审人 | 按评估授权，审批 PRD、审查风险及核验报告、复测和交付证据；已有该评估编辑贡献时仅保留读取权限。 |
+| 只读成员 | 读取明确授权评估的内容、结果和进度。 |
+| 供应商 | 独立身份，仅处理明确下发的任务；提交需求答复和交付证据，独立确认供应商基线。 |
+
+组织角色不自动开放其他人的评估；具体操作由该评估的成员角色决定。成员授权入口只允许调整普通账号的经办、评审和只读角色，不能用于授予负责人或管理员。客户与供应商仍需分别确认同一基线哈希。
+
+交付验收保留原有特例：经办人必须同时匹配原 `Assignment.operator_id` 且仍具编辑权限，才能审核供应商交付证据；仅有直接评估经办授权不足。此特例不授予 PRD、报告或基线审批权，且不得审核本人提交。
+
+English: Administrators can open Configuration → RBAC matrix to compare six roles across 16 actions. Current access uses organization roles plus individual assessment grants. Managers act only on assessments they own or manage; ordinary reviewers with editing contributions retain read-only access. Supplier responses and confirmations require an independent supplier identity. Delivery review retains its original task-operator exception. This bilingual reference page changes neither authorization rules nor runtime records.
+
+## 历史项目角色说明（2026-10-29）
+
+以下保留项目机制退役前的实现与操作记录；当前 Demo 的授权范围以上方说明为准。
 
 旧《开发计划：更新 3——多角色身份管理与审计日志》属于归档的问卷版应用，
 保存在 `.syseval/archive/questionnaire-app-20261024/`。其旧启动命令、端口和

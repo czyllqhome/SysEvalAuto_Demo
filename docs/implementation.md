@@ -1,8 +1,25 @@
+> 2026-11-05：统一全站字体、字号、控件与自适应内容宽度，减少宽屏留白。说明 / Unified interface: [interface-design.md](interface-design.md).
+
+> 2026-11-05：`AdminDashboard.tsx` / `admin_dashboard.py` 新增管理员只读汇总，入口 `/dashboard`，API `/api/v1/admin/dashboard`。管理员权限、组织隔离、当前 revision/source hash、独立同 hash 双签和风险接受/关闭区分保持有效。见 [实现口径与测试](admin-dashboard.md)。
+> English: The admin dashboard aggregates current scoped records without mutating workflow state.
+
+> 2026-11-05：推进响应优化。问卷“保存并继续”仅在内容或已知版本变化时写入，显式保存与最终确认仍执行原有版本检查；保存失败保留输入。评估详情与命令响应直接序列化 JSON，大响应启用 gzip；保存时取消重叠轮询，读取失败停止自动轮询。控制域表格按最多 3 个并发分页加载，完成后整体展示，离开页面取消请求。Word 仅在下载时生成，不参与推进请求。
+> English: Next reuses an unchanged draft only at the same known revision. Explicit saves and confirmations retain version checks. JSON responses use compression, overlapping reads are cancelled, failed reads stop polling, and catalog pages load in bounded batches before whole-domain display. Word export runs only on download.
+
+> 2026-11-05 整改闭环：负责人保存决定后自动下发被打回项；后续轮次只整改这些项，已接受承诺和逐项决定保持锁定。高风险经负责人逐项接受后按中风险记录，原始来源及报告不改写。全部接受后自动冻结基线，双方独立确认同一 hash 后自动转为待开发、开放最终稿下载。详见供应商协同说明。
+> English: Saving owner decisions opens a scoped remediation round or freezes an all-accepted baseline. Accepted risk is recorded as Medium without changing source ratings. Independent same-hash confirmation by both parties automatically finalizes development readiness.
+
+> 2026-11-05：复核页移除独立“例外与排除项审查”及其必填限制；历史说明、来源风险和独立双签保留。本页新增可撤销的负责人审查 Demo，填入三条用户示例，不自动保存或调用 AI。Retired the separate exception field; review Demo remains editable and requires individual High-risk acknowledgement.
+
+> 2026-11-05：复核汇总表融合逐项风险辅助、负责人审查及双方确认入口，移除重复折叠卡片区；保留原筛选与按域表格样式。无自动 AI 调用，全部审查及独立双签门槛不变。Integrated table review retains explicit AI initiation and independent confirmation. 详见供应商协同说明。
+
 > 2026-11-05 补充：来源高风险的待澄清项也必须由负责人逐项决定；可接受并记录责任理由，或要求澄清。批量操作跳过这些项；决定绑定当前提交和报告，不修改来源风险、供应商答复或独立双签要求。
 >
 > English: source-High clarification requires an individual owner decision. Acceptance requires a rationale and is bound to the current submission/report; bulk actions skip it.
 
 > 2026-11-05：供应商提交复核后仅保存不可变答复，直接进入负责人复核，不自动调用 AI 或排队影响分析。负责人默认查看开发项确认比例、部分/无法完成/待澄清数量，以及固定来源中高风险未确认项；后续规则/AI 审查按需显式发起，原双签及风险门槛保留。无需迁移或重置数据。详见[供应商协同说明](supplier-prd-delivery.md)。
+>
+> 单条 AI 现仅发送控制原文与供应商答复，返回一两句残余风险（上限240字符），不发送系统/定级/问卷，不展示建议或引用清单。Single-item advice uses only control and supplier data; full-report review gates remain unchanged.
 >
 > English: submission now shows a pinned commitment summary without automatic analysis. Subsequent rule/model review is explicit; existing review gates and independent baseline confirmations remain intact.
 
@@ -35,6 +52,49 @@
 > 2026-11-03 Demo: 项目机制和控制库写入入口已停用；使用直接评估、CN MLPS 来源库和 PRD v2。Current behavior: [更新说明 / Current contract](direct-assessment-mlps.md).
 
 # Implementation map
+
+2026-11-05：追加六组 Amer Sports 虚构演示数据，覆盖各评估阶段、供应商协同及六种整改状态；原记录逐表保留，脚本单事务且可重复执行。见 [场景及导入说明 / Demo fixtures](amer-sports-demo.md)。
+
+## 2026-11-05: development tracking workspace
+
+`DeliveryWorkspace`, `DeliveryBoard`, `DeliveryItemPanel`, `DeliveryEvidence` and shared delivery helpers implement role-aware progress, search/status filters, preserved drafts, evidence readiness and save-then-submit using the returned item version. Current deliveries render inline at the ninth assessment stage. Audit records add server-bound item references; `reopen_feedback` exposes the correct latest reopening rationale without modifying old reviews. Existing source, organization, version, immutable submission and independent confirmation gates remain in force. No migration or runtime reset. See [the bilingual workflow and verification guide](development-tracking.md).
+
+中文：开发追踪采用阶段条、总览与分层任务卡，证据、AI 辅助和人工验收分区显示；退回重交与已验收项重新打开保持历史可追溯。
+
+## 2026-11-05: Word PRD downloads
+
+PRD review and baseline download buttons now request `?format=docx` from the existing
+version-specific PRD and final-baseline document routes. `document_export.py` converts the
+saved Markdown using `markdown-it-py` and `python-docx`, preserving authored language,
+headings, tables, lists, source appendices and embedded PNG/JPEG/WebP topology images.
+WebP is converted to PNG for Word. Remote images, raw HTML and active URLs are not loaded.
+The original Markdown, including hidden source locators, is retained in an inert custom XML
+part. The PRD/baseline identifier and canonical hash are document metadata, not a new signature.
+Repeated exports are byte-stable for the same source and renderer version.
+
+Omitted `format` and `format=markdown` retain the existing Markdown response and web preview;
+other formats return 422. Both formats enforce the same organization and published-round
+access checks. Final Word exports still validate independent same-hash confirmations and
+the current immutable baseline before conversion. Exports do not regenerate content, call
+AI, create revisions, alter hashes or write runtime records. No migration is required.
+Dependencies and deployment locks are updated. Offline coverage is in `test_document_export.py`
+and `supplier-prd.test.tsx`.
+
+中文：PRD 与双方确认最终稿支持 Word 下载，旧 PRD 无需重新生成；正文、表格、原图和来源附录
+均从保存版本导出。网页预览仍用 Markdown，历史版本、组织权限、独立双签与基线指纹保持不变。
+
+## 2026-11-05: administrator RBAC reference
+
+`RbacMatrix.tsx` adds `/rbac` under the administrator Configuration navigation, with
+six role responsibility/scope cards and a grouped, bilingual 16-action permission matrix.
+The page and navigation both require `is_admin`. It reads no account or assessment data
+and offers a link to the existing People & access page for actual grants.
+Copy follows `access.py`, `people.py` and `delivery_service.authorize`, including direct
+assessment scope, reviewer contribution restrictions, independent supplier confirmations
+and the original task-operator delivery-review exception. Authorization logic and runtime
+records are unchanged. `rbac-matrix.test.tsx` covers navigation, direct-access denial,
+language switching and the critical customer/supplier permission distinctions.
+See [the current role guide](identity-and-roles.md).
 
 ## 2026-11-05: narrower domain rows
 

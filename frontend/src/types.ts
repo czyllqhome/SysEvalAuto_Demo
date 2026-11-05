@@ -30,16 +30,17 @@ export interface Answer {
   estimated_start_date?: string | null; estimated_finish_date?: string | null;
 }
 export interface Finding { contextual_assessment?: { exposure: string; exploitation_conditions: string; mitigations: string; uncertainties: string[]; facts: { path: string; quote: string }[] } | null; id: string; requirement_id: string; severity: string; title: string; evidence_field: string; evidence: string; impact: string; recommendation: string }
-export interface Decision { decision: 'accept' | 'changes' | ''; reason: string; owner_reviewed?: boolean }
+export interface Decision { decision: 'accept' | 'changes' | ''; reason: string; owner_reviewed?: boolean; residual_severity?: string }
 export type SourceRisk = 'high' | 'medium' | 'low' | 'unknown'
 export interface SupplierReviewItem {
   requirement_id: string; title: string; description: string; origin: Requirement['origin']; domains: string[];
   source_risk: SourceRisk; status: Answer['implementation_status'] | 'unanswered'; answer: Partial<Answer>;
+  owner_accepted?: boolean; residual_risk?: SourceRisk | null;
   controls: { id: string; source: string; identifier: string; text: string; risk: SourceRisk }[];
 }
 export interface SupplierReview {
   round_id: string; submission_id: string; submitted_at: number;
-  counts: Record<'total' | 'yes' | 'partial' | 'no' | 'needs_clarification' | 'unanswered' | 'attention' | 'high_unconfirmed' | 'medium_unconfirmed', number>;
+  counts: Record<'total' | 'yes' | 'partial' | 'no' | 'needs_clarification' | 'unanswered' | 'attention' | 'high_unconfirmed' | 'medium_unconfirmed', number> & Partial<Record<'owner_accepted' | 'accepted_previous', number>>;
   items: SupplierReviewItem[];
 }
 export interface SystemDetail {
@@ -51,7 +52,7 @@ export interface SystemDetail {
     network_topology?: { id: string; filename: string; mime: string; sha256: string }[]; context_revision_id?: string; created_at: number; updated_at: number };
   controls: Control[];
   prd: { id: string; data: PrdData; approved: boolean; language: Locale; mode: string; content_hash: string; requirement_domains?: Record<string, string[]>; high_risk_requirements?: string[] } | null;
-  round: { id: string; status: string; version: number; draft: Record<string, Answer>; submitted_id?: string; supplier_org_id: string; instructions?: string } | null;
+  round: { id: string; status: string; version: number; draft: Record<string, Answer>; submitted_id?: string; supplier_org_id: string; instructions?: string; number?: number; review_scope?: string[]; accepted_requirement_ids?: string[]; owner_feedback?: Record<string, { finding_id: string; reason: string }[]> } | null;
   report: { source_assessment?: { clarification_requirements?: string[]; owner_accepted_requirements?: string[]; high_requirements?: string[]; contextual_requirements?: string[]; status: string; blocking_requirements: string[]; failed_requirements: string[] }; control_originals?: Record<string, { id: string; code: string; text: string }[]>; mlps3_major_risk?: boolean; id: string; data: { summary: string; findings: Finding[] }; mode: string; reviewed: boolean; decisions: Record<string, Decision> } | null;
   baseline: { id: string; content_hash: string; finalized: boolean; confirmations: { party: string; actor_id: string; created_at: number }[] } | null;
   job_id?: string; invite_token?: string | null; existing_supplier?: boolean;

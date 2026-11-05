@@ -5,7 +5,6 @@ import MLPSGradeResult from './MLPSGradeResult'
 import type { Question } from './MLPSIntake'
 import type { SystemDetail } from './types'
 import { useLocale } from './i18n'
-import './mlps-intake.css'
 
 export default function GradeResultPanel({ detail }: { detail: SystemDetail }) {
   const { t } = useLocale()

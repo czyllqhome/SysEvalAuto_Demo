@@ -14,7 +14,6 @@ import { api, ApiError } from './api'
 import { Button, Notice, useCommand } from './components'
 import { useLocale } from './i18n'
 import type { SystemDetail } from './types'
-import './mlps-intake.css'
 
 type Value = Record<string, string | number> | string | number | string[] | Record<string, string>[] | Record<string, string>
 type Answers = Record<string, Value>
@@ -60,7 +59,7 @@ const filled = (v: Value | undefined) => v !== undefined && (typeof v !== 'strin
 
 export default function MLPSIntake({ detail, phase = 'all' }: { detail: SystemDetail; phase?: 'all' | 'grading' | 'information' | 'result' }) {
   const { t } = useLocale()
-  const query = useQuery({ queryKey: ['mlps-intake', detail.system.id], queryFn: () => api<Settings>(`/systems/${detail.system.id}/mlps-intake`) })
+  const query = useQuery({ queryKey: ['mlps-intake', detail.system.id], queryFn: ({ signal }) => api<Settings>(`/systems/${detail.system.id}/mlps-intake`, { signal }) })
   if (query.error) return <Notice error>{t('问卷读取失败。', 'Could not load the questionnaire.')}<Button onClick={() => void query.refetch()}>{t('重试', 'Retry')}</Button></Notice>
   if (!query.data) return <p>{t('正在读取 MLPS 信息收集问卷…', 'Loading the MLPS questionnaire…')}</p>
   return <Editor key={`${detail.system.id}-${phase}`} detail={detail} settings={query.data} phase={phase} />
@@ -92,6 +91,10 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
   const locked = busy || waiting || !editable
   const [catalogId, setCatalogId] = useState(settings.catalog_id)
   const body = { scheme: 'MLPS-INTAKE/1', answers, notes, department_contacts: contacts, frameworks, catalog_id: catalogId }
+  const lastSaved = useRef({ version: detail.system.version, body: JSON.stringify({
+    scheme: 'MLPS-INTAKE/1', answers: settings.saved.answers, notes: settings.saved.notes,
+    department_contacts: settings.saved.department_contacts, frameworks: settings.saved.frameworks, catalog_id: settings.saved.catalog_id,
+  }) })
   let dataQuestionNumber = 0
   const visible = settings.questions.filter(q => !q.parent_key && isVisible(q, answers)).filter(q => q.kind !== 'severity' || q.key.endsWith('_rights_severity')).map(q => q.kind === 'severity' ? { ...q, id: q.key.startsWith('info_') ? 'E09' : 'E10' } : q.id.startsWith('D') ? { ...q, id: `D${String(++dataQuestionNumber).padStart(2, '0')}` } : q)
   const answered = (q: Question) => ['data_categories', 'system_interaction'].includes(q.key) ? filled(answers[q.key]) && settings.questions.filter(child => child.parent_key === q.key && isVisible(child, answers)).every(child => filled(answers[child.key]) && !(child.key === 'personal_info_count_system' && answers[child.key] === '10,001–100,000 人')) : q.kind === 'recovery_targets' ? ['rto', 'rpo'].every(key => filled((answers[q.key] as Record<string, string | number> | undefined)?.[key])) : q.kind === 'volume_ranges' ? !!((answers[q.key] as Record<string, string> | undefined)?.records && (answers[q.key] as Record<string, string> | undefined)?.storage) : q.kind === 'severity' ? selectedImpactFields(q.key.startsWith('info_') ? 'info' : 'service', answers).length > 0 && selectedImpactFields(q.key.startsWith('info_') ? 'info' : 'service', answers).every(key => filled(answers[key])) : filled(answers[q.key])
@@ -118,8 +121,21 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
     window.addEventListener('beforeunload', prevent)
     return () => window.removeEventListener('beforeunload', prevent)
   }, [dirty])
-  async function save(rethrow = false, payload = body) {
-    try { await run(`/systems/${detail.system.id}/mlps-intake`, payload, 'PUT'); client.setQueryData(['mlps-intake', detail.system.id], { ...settings, saved: payload }); setDirty(false); return true } catch (cause) { if (rethrow) throw cause; return false }
+  async function save(rethrow = false, payload = body, skipUnchanged = false) {
+    const serialized = JSON.stringify(payload)
+    const latest = client.getQueryData<SystemDetail>(['system', detail.system.id]) ?? detail
+    if (skipUnchanged && serialized === lastSaved.current.body && latest.system.version === lastSaved.current.version) {
+      setDirty(false)
+      return true
+    }
+    const seq = sequence.current
+    try {
+      const saved = await run(`/systems/${detail.system.id}/mlps-intake`, payload, 'PUT')
+      lastSaved.current = { version: saved.system.version, body: serialized }
+      client.setQueryData(['mlps-intake', detail.system.id], { ...settings, saved: payload })
+      if (seq === sequence.current) setDirty(false)
+      return true
+    } catch (cause) { if (rethrow) throw cause; return false }
   }
   async function loadLatest() {
     setWaiting(true); setProblem('')
@@ -284,6 +300,6 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
     <fieldset disabled={locked} className="mlps-fields">
       {current.map(field)}
     </fieldset>
-    <footer className="mlps-footer"><span role="status">{step === steps.length - 1 && progressComplete < progressQuestions.length ? t(`还有 ${progressQuestions.length - progressComplete} 个问题待填写`, `${progressQuestions.length - progressComplete} questions remain`) : dirty ? t('有未保存更改', 'Unsaved changes') : t('草稿已载入 / 已保存', 'Draft loaded / saved')}</span><div><Button variant="secondary" disabled={step === (phase === 'information' ? 1 : 0) || locked} onClick={() => setStep(step - 1)}><ArrowLeft size={15} />{t('上一步', 'Back')}</Button><Button variant="secondary" disabled={locked || !frameworks.length} onClick={() => void save()}>{t('保存草稿', 'Save draft')}</Button>{phase === 'all' && step < steps.length - 1 && <Button variant="secondary" disabled={locked || !frameworks.length || complete < visible.length} onClick={async () => { if (await save() && await preview()) setStep(steps.length) }}>{t('查看系统等级', 'View system grade')}<ArrowRight size={15} /></Button>}{step < steps.length && <Button disabled={locked || !frameworks.length || step === steps.length - 1 && complete < visible.length} onClick={async () => { if (await save()) { if (step === 0) { if (phase === 'grading') navigate(`/systems/${detail.system.id}/grade-result`); else if (await preview()) setEarlyResult(true) } else if (phase === 'information' && step === steps.length - 1) { try { await run(`/systems/${detail.system.id}/information-confirmations`, body); setDirty(false); navigate(`/systems/${detail.system.id}/controls`) } catch { /* Validation errors remain visible for correction. */ } } else if (step < steps.length - 1 || await preview()) setStep(step + 1) } }}>{step === 0 ? t('先计算系统等级', 'Calculate grade first') : phase === 'information' && step === steps.length - 1 ? t('确认系统信息', 'Confirm system information') : step === steps.length - 1 ? t('下一步：查看系统等级', 'Next: view system grade') : t('保存并继续', 'Save & continue')}<ArrowRight size={15} /></Button>}</div></footer></main></div>
+    <footer className="mlps-footer"><span role="status">{step === steps.length - 1 && progressComplete < progressQuestions.length ? t(`还有 ${progressQuestions.length - progressComplete} 个问题待填写`, `${progressQuestions.length - progressComplete} questions remain`) : dirty ? t('有未保存更改', 'Unsaved changes') : t('草稿已载入 / 已保存', 'Draft loaded / saved')}</span><div><Button variant="secondary" disabled={step === (phase === 'information' ? 1 : 0) || locked} onClick={() => setStep(step - 1)}><ArrowLeft size={15} />{t('上一步', 'Back')}</Button><Button variant="secondary" disabled={locked || !frameworks.length} onClick={() => void save()}>{t('保存草稿', 'Save draft')}</Button>{phase === 'all' && step < steps.length - 1 && <Button variant="secondary" disabled={locked || !frameworks.length || complete < visible.length} onClick={async () => { if (await save() && await preview()) setStep(steps.length) }}>{t('查看系统等级', 'View system grade')}<ArrowRight size={15} /></Button>}{step < steps.length && <Button disabled={locked || !frameworks.length || step === steps.length - 1 && complete < visible.length} onClick={async () => { if (await save(false, body, true)) { if (step === 0) { if (phase === 'grading') navigate(`/systems/${detail.system.id}/grade-result`); else if (await preview()) setEarlyResult(true) } else if (phase === 'information' && step === steps.length - 1) { try { await run(`/systems/${detail.system.id}/information-confirmations`, body); setDirty(false); navigate(`/systems/${detail.system.id}/controls`) } catch { /* Validation errors remain visible for correction. */ } } else if (step < steps.length - 1 || await preview()) setStep(step + 1) } }}>{step === 0 ? t('先计算系统等级', 'Calculate grade first') : phase === 'information' && step === steps.length - 1 ? t('确认系统信息', 'Confirm system information') : step === steps.length - 1 ? t('下一步：查看系统等级', 'Next: view system grade') : t('保存并继续', 'Save & continue')}<ArrowRight size={15} /></Button>}</div></footer></main></div>
   </section>
 }

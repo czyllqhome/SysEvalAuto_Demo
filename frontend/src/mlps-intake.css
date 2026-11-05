@@ -51,7 +51,7 @@
 .mlps-intake .mlps-header p,.mlps-intake .mlps-section-heading p { font-size:17px; color:#40536e; }
 .mlps-intake .mlps-question { padding:30px; }
 .mlps-intake .mlps-question label:not(.check-label):not(.search-field):not(.upload-zone) { font-size:17px; color:#263b55; line-height:1.8; }
-.mlps-intake .mlps-question label.mlps-question-title { font-size:20px !important; font-weight:650; color:#172d49; line-height:1.75; }
+.mlps-intake .mlps-question label.mlps-question-title { font-size:20px ; font-weight:650; color:#172d49; line-height:1.75; }
 .mlps-intake .mlps-question .field-hint { font-size:16px; color:#425570; line-height:1.85; }
 .mlps-intake .mlps-question-meta { font-size:15px; color:#425570; gap:14px; }
 .mlps-intake .mlps-question textarea,.mlps-intake .mlps-question select,.mlps-intake .mlps-question input:not([type=checkbox]):not([type=radio]):not([type=file]) { font-family:inherit; font-size:18px; line-height:1.7; padding:12px 14px; color:#1e334f; }

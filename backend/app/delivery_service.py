@@ -144,8 +144,18 @@ def item_view(db, item):
         submissions.append({'id': sub.id, 'round_no': sub.round_no, 'payload': sub.payload, 'manifest_hash': sub.manifest_hash,
                             'ai': {'id': job.id, 'state': job.state, 'error': job.error, 'output': job.output if job.state == 'succeeded' else None} if job else None,
                             'created_at': sub.created_at, 'review': {**review.data, 'actor_id': review.actor_id, 'created_at': review.created_at} if review else None})
+    reopen_feedback = None
+    if item.status == 'CHANGES_REQUESTED':
+        batch = db.get(DeliveryBatch, item.batch_id)
+        event = db.scalar(select(Audit).where(
+            Audit.system_id == batch.system_id, Audit.action == 'delivery.reopen',
+            Audit.detail['item_id'].as_string() == item.id,
+        ).order_by(Audit.created_at.desc()).limit(1))
+        if event and (not submissions or event.created_at >= submissions[-1]['created_at']):
+            reopen_feedback = {'reason': event.detail['reason'], 'created_at': event.created_at}
     return {'id': item.id, 'batch_id': item.batch_id, 'source_id': item.source_id, 'snapshot': item.snapshot,
             'criteria': item.criteria, 'draft': item.draft, 'version': item.version, 'status': item.status,
+            'reopen_feedback': reopen_feedback,
             'attachments': [attachment_view(a) for a in db.scalars(select(EvidenceAttachment).where(EvidenceAttachment.item_id == item.id))],
             'submissions': submissions}
 
@@ -368,4 +378,5 @@ def retest_failed(db, plan):
 
 def audit(db, user, batch, action, body):
     db.add(Audit(system_id=batch.system_id, actor_id=user.id, action='delivery.' + action,
-                 detail={'batch_id': batch.id, 'source_hash': batch.source_hash, 'reason': body.get('reason'), 'at': time.time()}))
+                 detail={'batch_id': batch.id, 'source_hash': batch.source_hash, 'reason': body.get('reason'),
+                         **({'item_id': body['item_id']} if body.get('item_id') else {}), 'at': time.time()}))

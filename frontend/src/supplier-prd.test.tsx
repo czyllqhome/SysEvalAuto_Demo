@@ -4,11 +4,35 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgreementPanel, PrdPanel } from './downstream'
 import { AuthContext } from './components'
-import { LocaleProvider } from './i18n'
+import { LocaleProvider, useLocale } from './i18n'
 import type { SystemDetail } from './types'
 import { blankAnswer } from './supplierAnswers'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear() })
+
+it('shows only returned requirements with owner feedback and retains accepted answers on save', async () => {
+  const detail = fixture()
+  const original = detail.prd!.data.requirements[0]
+  detail.prd!.data.requirements = [original, { ...original, id: 'REQ-2', title: '待整改控制', origin: 'control' }]
+  detail.round = { ...detail.round!, number: 2, review_scope: ['REQ-2'], accepted_requirement_ids: ['REQ-1'],
+    owner_feedback: { 'REQ-2': [{ finding_id: 'F-2', reason: '使用指定工具\n保留负责人原文' }] },
+    draft: { 'REQ-1': { ...blankAnswer(), implementation_status: 'yes' }, 'REQ-2': { ...blankAnswer(), implementation_status: 'no', limitations: '供应商原有答复' } } }
+  const fetcher = vi.fn(async (_url, init) => init?.method === 'PUT' ? { ok: true, json: async () => detail } : { ok: true, text: async () => '# PRD' })
+  vi.stubGlobal('fetch', fetcher)
+  show(detail)
+  expect(screen.queryByRole('article', { name: 'REQ-1 身份认证' })).not.toBeInTheDocument()
+  expect(screen.getAllByRole('article', { name: /REQ-/ })).toHaveLength(1)
+  expect(screen.getByText('负责人打回要求')).toBeVisible()
+  expect(screen.getByText(/使用指定工具/)).toBeVisible()
+  expect(screen.getByText(/此前已接受 1 项/)).toBeVisible()
+  fireEvent.click(screen.getByLabelText('可以按本项要求完成'))
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }))
+  await waitFor(() => expect(fetcher.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true))
+  const payload = JSON.parse(fetcher.mock.calls.find(([, init]) => init?.method === 'PUT')![1].body)
+  expect(payload.answers['REQ-1']).toEqual(detail.round.draft['REQ-1'])
+  expect(payload.answers['REQ-2'].implementation_status).toBe('yes')
+  expect(screen.getByRole('button', { name: '提交答复' })).toBeEnabled()
+})
 
 it('fills and saves the reusable Demo exception and can undo to the authored draft', async () => {
   const detail = fixture()
@@ -53,6 +77,25 @@ function show(detail: SystemDetail, agreement = false) {
   }}><MemoryRouter>{agreement ? <AgreementPanel detail={detail} /> : <PrdPanel detail={detail} />}</MemoryRouter></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
 }
 
+function LanguageToggle() {
+  const { setLocale } = useLocale()
+  return <button onClick={() => setLocale('en')}>English</button>
+}
+
+it('downloads the same PRD as Word while keeping the Markdown preview and authored language', async () => {
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, text: async () => '# 已保存原文' })
+  vi.stubGlobal('fetch', fetcher)
+  render(<QueryClientProvider client={new QueryClient()}><LocaleProvider><LanguageToggle /><AuthContext.Provider value={{
+    user: { id: 'owner', name: 'Owner', email: 'owner@example.test', role: 'owner', org_id: 'customer' }, csrf: '', model_configured: false,
+  }}><MemoryRouter><PrdPanel detail={fixture()} /></MemoryRouter></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
+  expect(await screen.findByRole('heading', { name: '已保存原文' })).toBeVisible()
+  expect(screen.getByRole('link', { name: '下载 Word PRD' })).toHaveAttribute('href', '/api/v1/systems/s/prd-versions/prd/document?format=docx')
+  expect(fetcher).toHaveBeenCalledWith('/api/v1/systems/s/prd-versions/prd/document', expect.objectContaining({ credentials: 'same-origin' }))
+  fireEvent.click(screen.getByText('English'))
+  expect(screen.getByRole('link', { name: 'Download Word PRD' })).toHaveAttribute('href', '/api/v1/systems/s/prd-versions/prd/document?format=docx')
+  expect(screen.getByRole('heading', { name: '已保存原文' })).toBeVisible()
+})
+
 it('allows supplier inline PRD checkboxes and exceptions, saving reasons against the same requirement', async () => {
   const detail = fixture()
   const fetcher = vi.fn().mockImplementation(async (_url, init) => init?.method === 'PUT'
@@ -88,7 +131,7 @@ it('makes submitted supplier responses read-only', () => {
   detail.round!.status = 'submitted'
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => '# PRD' }))
   show(detail)
-  expect(screen.getByLabelText('可以按本项要求完成')).toBeDisabled()
+  expect(screen.queryByLabelText('可以按本项要求完成')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '提交答复' })).not.toBeInTheDocument()
 })
 
@@ -97,11 +140,12 @@ it('offers a final document only after both parties confirm', () => {
   detail.system.status = 'FINAL_CONFIRMATION'
   detail.baseline = { id: 'b', finalized: false, content_hash: 'same-hash', confirmations: [{ party: 'customer', actor_id: 'customer', created_at: 1 }] }
   show(detail, true)
-  expect(screen.queryByRole('link', { name: '下载双方确认最终稿' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: '下载双方确认最终稿（Word）' })).not.toBeInTheDocument()
   cleanup()
   detail.baseline.confirmations.push({ party: 'supplier', actor_id: 'vendor', created_at: 2 })
   show(detail, true)
-  expect(screen.getByRole('link', { name: '下载双方确认最终稿' })).toHaveAttribute('href', '/api/v1/baselines/b/document')
+  expect(screen.getByRole('link', { name: '下载双方确认最终稿（Word）' })).toHaveAttribute('href', '/api/v1/baselines/b/document?format=docx')
+  expect(screen.getByRole('link', { name: '下载对应 Word PRD' })).toHaveAttribute('href', '/api/v1/systems/s/prd-versions/prd/document?format=docx')
 })
 
 

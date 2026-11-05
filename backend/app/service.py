@@ -19,7 +19,7 @@ from .db import (
     Report, Selection, Submission, SupplierRound, System,
 )
 from .domain import (
-    Context, DomainError, SupplierAnswer, classify, context_grade_facts, digest, validate_context,
+    Context, DomainError, classify, context_grade_facts, digest, validate_context,
     validate_prd, validate_report,
 )
 
@@ -332,11 +332,15 @@ def job_input(db, system, kind):
                 "network_topology": topology_snapshot(db, system.id),
                 **({'remediation_source': trace} if trace else {})}
     if kind == "impact_analysis":
+        from .negotiation import scope
         round_ = db.get(SupplierRound, system.round_id) if system.round_id else None
         if not round_ or not round_.submitted_id:
             raise DomainError("STATE_CONFLICT", 409)
-        return {"round_id": round_.id, "prd": db.get(Prd, round_.prd_id).data,
-                "context": round_.snapshot["context"], "answers": db.get(Submission, round_.submitted_id).data,
+        prd = db.get(Prd, round_.prd_id)
+        active = scope(round_, prd)
+        return {"round_id": round_.id, "prd": {**prd.data, 'requirements': [r for r in prd.data['requirements'] if r['id'] in active]},
+                "context": round_.snapshot["context"],
+                "answers": {rid: answer for rid, answer in db.get(Submission, round_.submitted_id).data.items() if rid in active},
                 "classification": round_.snapshot.get('classification', {}),
                 "questionnaire": round_.snapshot.get('questionnaire', {}),
                 "controls": round_.snapshot.get('controls', []),
@@ -441,12 +445,17 @@ def publish_job(db, system, job, output):
         prd_templates.record(db, prd, pinned)
         job.output = {"prd_id": prd.id}
     elif job.kind == "impact_analysis":
+        from .negotiation import carried_findings
         evidence = redact_source(job.input["answers"]) if job.mode == "openrouter" else job.input["answers"]
         data = validate_report(output, job.input["prd"]["requirements"], evidence,
                                contextual_source=redact_source(job.input) if job.mode == 'openrouter' else None)
         round_ = db.get(SupplierRound, job.input["round_id"])
+        carried, decisions = carried_findings(round_)
+        data = {**data, 'findings': [*carried, *data['findings']]}
+        if round_.snapshot.get('legacy_exceptions'):
+            decisions['_exceptions'] = round_.snapshot['legacy_exceptions']
         report = Report(system_id=system.id, submission_id=round_.submitted_id,
-                        data=data, mode=job.mode, decisions={}, reviewed=False)
+                        data=data, mode=job.mode, decisions=decisions, reviewed=False)
         db.add(report)
         db.flush()
         system.report_id, system.status = report.id, "RESULT_REVIEW"
@@ -456,17 +465,14 @@ def publish_job(db, system, job, output):
 
 
 def save_submission(db, system, round_, user, payload):
+    from .negotiation import merge_answers
     if round_.supplier_org_id != user.org_id or user.role != "vendor":
         raise DomainError("FORBIDDEN", 403)
     if system.round_id != round_.id or round_.status != "open":
         raise DomainError("ROUND_CLOSED", 409)
     if payload.get("round_version") != round_.version:
         raise DomainError("VERSION_CONFLICT", 409)
-    answers = payload.get("answers", {})
-    requirements = db.get(Prd, round_.prd_id).data["requirements"]
-    if set(answers) != {item["id"] for item in requirements}:
-        raise DomainError("FORM_INCOMPLETE")
-    validated = {key: SupplierAnswer.model_validate(value).model_dump(mode="json") for key, value in answers.items()}
+    validated = merge_answers(round_, db.get(Prd, round_.prd_id), payload.get('answers', {}), complete=True)
     submission = Submission(round_id=round_.id, actor_id=user.id, data=validated)
     db.add(submission)
     db.flush()
@@ -479,7 +485,8 @@ def save_submission(db, system, round_, user, payload):
     return submission
 
 
-def review_report(db, system, payload):
+def review_report(db, system, payload, actor_id=None):
+    from .negotiation import carried_findings, open_round
     require_state(system, "RESULT_REVIEW", "NEGOTIATING")
     report = db.get(Report, system.report_id) if system.report_id else None
     if not report:
@@ -487,34 +494,56 @@ def review_report(db, system, payload):
     round_ = db.get(SupplierRound, system.round_id) if system.round_id else None
     if not round_ or report.submission_id != round_.submitted_id:
         raise DomainError("VERSION_CONFLICT", 409)
+    if payload.get('report_id', report.id) != report.id:
+        raise DomainError('VERSION_CONFLICT', 409)
     decisions = payload.get("decisions", {})
+    _, carried_decisions = carried_findings(round_)
     expected = {finding["id"] for finding in report.data["findings"]}
-    if expected != set(decisions):
+    if not isinstance(decisions, dict) or set(decisions) not in (expected, expected - set(carried_decisions)):
         raise DomainError("REVIEW_INCOMPLETE")
+    if any(decisions[key] != value for key, value in carried_decisions.items() if key in decisions):
+        raise DomainError('ACCEPTED_REQUIREMENT_LOCKED', 409)
+    decisions = {**copy.deepcopy(decisions), **carried_decisions}
     for item in decisions.values():
-        if item.get("decision") not in ("accept", "changes") or not str(item.get("reason", "")).strip():
+        if not isinstance(item, dict) or item.get("decision") not in ("accept", "changes") or not isinstance(item.get('reason'), str) or not item['reason'].strip():
             raise DomainError("REVIEW_INCOMPLETE")
-    if not str(payload.get("exception_reason", "")).strip():
-        raise DomainError("EXCEPTION_REVIEW_REQUIRED")
     from .source_risk import assessment
     source_review = assessment(db, system)
-    blocked = set(source_review['blocking_requirements'])
-    clarification = set(source_review.get('clarification_requirements', []))
+    high = set(source_review.get('high_requirements', []))
+    answers = db.get(Submission, round_.submitted_id).data
     for finding in report.data['findings']:
         decision = decisions[finding['id']]
+        if finding['id'] in carried_decisions:
+            continue
+        decision.pop('residual_severity', None)
         if decision['decision'] != 'accept':
             continue
-        if finding['requirement_id'] in clarification:
+        source_exception = (finding['requirement_id'] in high
+                            and answers[finding['requirement_id']]['implementation_status'] != 'yes')
+        if source_exception:
             if decision.get('owner_reviewed') is not True:
                 raise DomainError('HIGH_RISK_CONTROL_UNRESOLVED', 409)
-        elif finding['requirement_id'] in blocked:
-            raise DomainError('HIGH_RISK_CONTROL_UNRESOLVED', 409)
-    report.decisions = {**decisions, "_exceptions": {"reason": payload["exception_reason"]}}
+        if source_exception or finding['severity'] in ('high', 'critical'):
+            decision['residual_severity'] = 'medium'
+    # The separate exception review is retired. Preserve authored historical notes,
+    # including when a new client omits the old optional compatibility field.
+    legacy_exceptions = report.decisions.get("_exceptions")
+    legacy_reason = payload.get("exception_reason")
+    if isinstance(legacy_reason, str) and legacy_reason.strip():
+        legacy_exceptions = {"reason": legacy_reason}
+    report.decisions = {**decisions, **({"_exceptions": legacy_exceptions} if legacy_exceptions else {})}
     report.reviewed = True
     system.status = "NEGOTIATING" if any(d["decision"] == "changes" for d in decisions.values()) else "RESULT_REVIEW"
+    if payload.get('advance_workflow') is True:
+        if system.status == 'NEGOTIATING':
+            return open_round(db, system, actor_id=actor_id)
+        freeze_baseline(db, system)
+        db.add(Audit(system_id=system.id, actor_id=actor_id, action='baseline.frozen',
+                     detail={'baseline_id': system.baseline_id, 'report_id': report.id}))
 
 
 def baseline_payload(db, system):
+    from .negotiation import accepted
     prd = db.get(Prd, system.prd_id)
     round_ = db.get(SupplierRound, system.round_id)
     report = db.get(Report, system.report_id)
@@ -524,7 +553,8 @@ def baseline_payload(db, system):
             "prd_id": prd.id, "prd_hash": prd.content_hash, "prd": prd.data,
             "round_id": round_.id, "supplier_org_id": round_.supplier_org_id,
             "submission_id": round_.submitted_id, "answers": db.get(Submission, round_.submitted_id).data,
-            "report_id": report.id, "report": report.data, "decisions": report.decisions}
+            "report_id": report.id, "report": report.data, "decisions": report.decisions,
+            **({'accepted_requirements': accepted(round_)} if accepted(round_) else {})}
 
 
 def freeze_baseline(db, system):
@@ -532,9 +562,12 @@ def freeze_baseline(db, system):
     require_passable(db, system)
     require_state(system, "RESULT_REVIEW")
     report = db.get(Report, system.report_id)
-    if not report or not report.reviewed or any(
-        value.get("decision") == "changes" for key, value in report.decisions.items() if not key.startswith("_")
-    ):
+    round_ = db.get(SupplierRound, system.round_id)
+    prd = db.get(Prd, system.prd_id)
+    if (not report or not report.reviewed or report.submission_id != round_.submitted_id or not prd.approved
+            or {f['requirement_id'] for f in report.data['findings']} != {r['id'] for r in prd.data['requirements']}
+            or any(report.decisions.get(f['id'], {}).get('decision') != 'accept'
+                   or not report.decisions[f['id']].get('reason', '').strip() for f in report.data['findings'])):
         raise DomainError("REVIEW_INCOMPLETE")
     payload = baseline_payload(db, system)
     baseline = Baseline(system_id=system.id, payload=payload, content_hash=digest(payload))
@@ -559,11 +592,22 @@ def confirm_baseline(db, system, baseline, user, content_hash):
         raise DomainError("DISTINCT_APPROVERS_REQUIRED", 409)
     if not any(item.party == party for item in confirmations):
         db.add(Confirmation(baseline_id=baseline.id, actor_id=user.id, party=party, content_hash=content_hash))
+    db.flush()
+    confirmations = list(db.scalars(select(Confirmation).where(Confirmation.baseline_id == baseline.id)))
+    if {item.party for item in confirmations} == {'customer', 'supplier'} and not baseline.finalized:
+        finalize_agreement(db, system, baseline)
+        db.add(Audit(system_id=system.id, actor_id=user.id, action='baseline.finalized',
+                     detail={'baseline_id': baseline.id, 'automatic_after_joint_confirmation': True}))
 
 
 def finalize(db, system, baseline, user):
     if user.id != system.owner_id or user.role == "vendor":
         raise DomainError("FORBIDDEN", 403)
+    finalize_agreement(db, system, baseline)
+
+
+def finalize_agreement(db, system, baseline):
+    """Called only after explicit independent confirmations or the authorized legacy command."""
     if baseline.id != system.baseline_id:
         raise DomainError("BASELINE_CHANGED", 409)
     if baseline.finalized and system.status == "PENDING_DEVELOPMENT":
@@ -581,6 +625,7 @@ def finalize(db, system, baseline, user):
 
 
 def system_view(db, system, user):
+    from .negotiation import accepted, round_number, scope
     from .supplier_review import summary as supplier_summary
     from .source_risk import assessment as source_assessment
     from .source_risk import high_source_requirements
@@ -627,8 +672,12 @@ def system_view(db, system, user):
             "round": {"id": round_.id, "status": round_.status, "version": round_.version,
                       "draft": round_.draft, "submitted_id": round_.submitted_id,
                       "instructions": round_.snapshot.get("instructions", ""),
+                      "number": round_number(db, round_),
+                      "review_scope": sorted(scope(round_, prd)),
+                      "accepted_requirement_ids": sorted(accepted(round_)),
+                      "owner_feedback": round_.snapshot.get('owner_feedback', {}),
                       "supplier_org_id": round_.supplier_org_id} if round_ else None,
-            "supplier_review": supplier_summary(db, round_),
+            "supplier_review": supplier_summary(db, round_, report),
             "report": {"id": report.id, "data": report.data, "mode": report.mode,
                        "mlps3_major_risk": mlps3_major_risk(db, system, prd, report),
                        "source_assessment": source_assessment(db, system),

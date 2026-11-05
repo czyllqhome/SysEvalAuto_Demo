@@ -30,9 +30,6 @@ def test_gate_is_source_risk_and_immutable_supplier_commitment(owner, risk, stat
     if expected in ('failed', 'pending'):
         decisions = {f['id']: {'decision': 'accept', 'reason': 'Accept all risk'} for f in result['report']['data']['findings']}
         command(client, sid, 'review-decisions', {'decisions': decisions, 'exception_reason': 'Accepted'}, expected=409)
-        if status in ('no', 'partial'):
-            marked = {key: {**value, 'owner_reviewed': True} for key, value in decisions.items()}
-            command(client, sid, 'review-decisions', {'decisions': marked, 'exception_reason': 'Accepted'}, expected=409)
         # Even a reviewed report or a model changing severity cannot bypass the source gate.
         with app.state.sessions.begin() as db:
             system = db.get(System, sid)
@@ -44,6 +41,11 @@ def test_gate_is_source_risk_and_immutable_supplier_commitment(owner, risk, stat
                 row.snapshot = {**row.snapshot, 'metadata': {}}
             assert assessment(db, system)['status'] == expected
         assert command(client, sid, 'baselines', expected=409).json()['code'] == 'HIGH_RISK_CONTROL_UNRESOLVED'
+        marked = {key: {**value, 'owner_reviewed': True} for key, value in decisions.items()}
+        accepted = command(client, sid, 'review-decisions', {'decisions': marked}).json()
+        finding = next(f for f in accepted['report']['data']['findings'] if f['requirement_id'] == target['id'])
+        assert accepted['report']['decisions'][finding['id']]['residual_severity'] == 'medium'
+        assert accepted['report']['source_assessment']['blocking_requirements'] == []
     else:
         decisions = {f['id']: {'decision': 'accept', 'reason': 'Reviewed; acceptance evidence remains due'} for f in result['report']['data']['findings']}
         command(client, sid, 'review-decisions', {'decisions': decisions, 'exception_reason': 'Reviewed scope'})
@@ -70,16 +72,16 @@ def test_high_clarification_requires_explicit_owner_decision_without_ai(owner, d
     assert finding['severity'] == 'unknown'
     assert report['source_assessment']['clarification_requirements'] == [target['id']]
     decisions = {f['id']: {'decision': 'accept', 'reason': 'Owner will verify implementation evidence'} for f in report['data']['findings']}
-    command(client, sid, 'review-decisions', {'decisions': decisions, 'exception_reason': 'Reviewed'}, expected=409)
+    command(client, sid, 'review-decisions', {'decisions': decisions}, expected=409)
     decisions[finding['id']] = {'decision': decision, 'reason': 'Customer security owner accepts responsibility; obtain hosting evidence before release', 'owner_reviewed': True}
     # Neither a blank rationale nor a stale version can publish an owner decision.
     invalid = {**decisions, finding['id']: {**decisions[finding['id']], 'reason': ' '}}
     command(client, sid, 'review-decisions', {'decisions': invalid, 'exception_reason': 'Reviewed'}, expected=422)
     command(client, sid, 'review-decisions', {'decisions': decisions, 'exception_reason': 'Reviewed', 'version': -1}, expected=409)
     command(vendor, sid, 'review-decisions', {'decisions': decisions, 'exception_reason': 'Reviewed'}, expected=404)
-    result = command(client, sid, 'review-decisions', {'decisions': decisions, 'exception_reason': 'Reviewed'}).json()
+    result = command(client, sid, 'review-decisions', {'decisions': decisions}).json()
     source = result['report']['source_assessment']
-    assert result['supplier_review']['counts']['high_unconfirmed'] == 1
+    assert result['supplier_review']['counts']['high_unconfirmed'] == (0 if decision == 'accept' else 1)
     assert result['report']['data'] == report['data']  # Source risk and unknown severity are not rewritten.
     assert result['report']['decisions'][finding['id']]['owner_reviewed'] is True
     if decision == 'changes':

@@ -43,14 +43,16 @@ def assessment(db, system):
         findings = [f for f in report.data['findings'] if f['requirement_id'] == requirement['id']] if report else []
         if status == 'needs_clarification':
             clarification.append(requirement['id'])
-            # An owner may explicitly accept unresolved clarification with a
-            # rationale. Never infer this from an old/bulk decision or AI severity.
-            if (report and report.reviewed and report.submission_id == round_.submitted_id and findings
-                    and all(report.decisions.get(f['id'], {}).get('decision') == 'accept'
-                            and report.decisions[f['id']].get('owner_reviewed') is True
-                            and str(report.decisions[f['id']].get('reason', '')).strip() for f in findings)):
-                owner_accepted.append(requirement['id'])
-                continue
+        # Explicit owner acceptance is a separate disposition, never a source-rating
+        # change or an inferred supplier commitment. Carried decisions are server-owned.
+        from .negotiation import accepted
+        carried = accepted(round_).get(requirement['id'])
+        if (report and (report.reviewed or carried) and report.submission_id == round_.submitted_id and findings
+                and all(report.decisions.get(f['id'], {}).get('decision') == 'accept'
+                        and report.decisions[f['id']].get('owner_reviewed') is True
+                        and str(report.decisions[f['id']].get('reason', '')).strip() for f in findings)):
+            owner_accepted.append(requirement['id'])
+            continue
         resolved = (status in ('no', 'partial') and report and report.mode == 'openrouter'
                     and report.submission_id == round_.submitted_id and findings
                     and all(f['severity'] in ('low', 'medium') and f.get('contextual_assessment')

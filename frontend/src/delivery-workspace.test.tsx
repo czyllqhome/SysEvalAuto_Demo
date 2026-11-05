@@ -37,5 +37,5 @@ it('does not expose customer decisions to a supplier and preserves drafts on err
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }))
   await screen.findByText(/VERSION_CONFLICT/)
   expect(screen.getByLabelText('完成与证据说明')).toHaveValue('Keep my evidence description')
-  expect(screen.getByRole('button', { name: '正式提交' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '保存并提交验收' })).toBeDisabled()
 })

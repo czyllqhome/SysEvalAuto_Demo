@@ -62,3 +62,6 @@
 .prd-questionnaire-facts dd:has(table) { overflow-x: auto; }
 
 .owner-clarification-notice { grid-column: 1 / -1; margin: 0; padding: 12px 14px; background: #fff5eb; border: 1px solid #e8d0bb; color: #875327; border-radius: 6px; line-height: 1.7; }
+
+.residual-risk-note { margin-top: 12px; padding: 12px; border: 1px solid #dce5f0; border-radius: 6px; background: #f7faff; font-size: 13px; line-height: 1.7; }
+.residual-risk-note p { margin: 8px 0 0; }

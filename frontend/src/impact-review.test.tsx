@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -8,6 +8,41 @@ import { LocaleProvider } from './i18n'
 import type { SystemDetail } from './types'
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.unstubAllGlobals() })
+
+it('shows a specific single-item error only on its card and shows only a brief residual risk on retry', async () => {
+  const detail: SystemDetail = {
+    system: { id: 's', name: 'Test', status: 'RESULT_REVIEW', version: 4, revision: 1,
+      context: {}, draft: {}, classification: {}, created_at: 0, updated_at: 0 },
+    permissions: ['read', 'edit', 'review', 'manage'], controls: [], prd: null, round: null, baseline: null,
+    report: { id: 'r', mode: 'local', reviewed: false, decisions: {}, data: { summary: 'Review', findings: [1, 2].map(n => ({
+      id: `F-${n}`, requirement_id: `REQ-${n}`, severity: 'high', title: `Risk ${n}`,
+      evidence_field: 'limitations', evidence: `Supplier limitation ${n}`, impact: 'Pending', recommendation: 'Verify',
+    })) } },
+  }
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce({ ok: false, json: async () => ({ code: 'INVALID_SOURCE_REFERENCE' }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ findings: [{ residual_risk: 'Credentials may be exposed.' }] }) })
+  vi.stubGlobal('fetch', fetcher)
+  render(<QueryClientProvider client={new QueryClient()}><LocaleProvider><AuthContext.Provider value={{
+    user: { id: 'm', name: 'Manager', email: 'm@test', role: 'member', org_id: 'org' }, csrf: '', model_configured: true,
+  }}><Preferences><MemoryRouter><ImpactPanel detail={detail} /></MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
+  const first = within(screen.getByText('Supplier limitation 1').closest('article')!)
+  const second = within(screen.getByText('Supplier limitation 2').closest('article')!)
+  fireEvent.change(first.getByLabelText('客户决定'), { target: { value: 'changes' } })
+  fireEvent.change(first.getByLabelText('理由与责任安排'), { target: { value: 'Require verification before release' } })
+  fireEvent.click(first.getByRole('button', { name: 'AI 分析残余风险' }))
+  await waitFor(() => expect(first.getByText('输出引用了无效来源，未发布结果。')).toBeVisible())
+  expect(second.queryByText('输出引用了无效来源，未发布结果。')).not.toBeInTheDocument()
+  expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ version: 4, report_id: 'r', requirement_id: 'REQ-1', language: 'zh' })
+  fireEvent.click(first.getByRole('button', { name: 'AI 分析残余风险' }))
+  await waitFor(() => expect(first.getByText('Credentials may be exposed.')).toBeVisible())
+  expect(first.queryByText('输出引用了无效来源，未发布结果。')).not.toBeInTheDocument()
+  expect(first.queryByText('处理建议')).not.toBeInTheDocument()
+  expect(first.queryByText('引用依据')).not.toBeInTheDocument()
+  expect(first.getByLabelText('客户决定')).toHaveValue('changes')
+  expect(first.getByLabelText('理由与责任安排')).toHaveValue('Require verification before release')
+  expect(fetcher).toHaveBeenCalledTimes(2)
+})
 
 it('explains why accepted findings still need rationale, including hidden findings', () => {
   const detail: SystemDetail = {
@@ -55,7 +90,7 @@ it('bulk accepts submitted yes responses', () => {
   expect((screen.getByLabelText('理由与责任安排') as HTMLTextAreaElement).value).toContain('接受供应商可实施承诺')
 })
 
-it('shows the source High failure and prevents accepting or freezing the unresolved control', () => {
+it('requires explicit owner acceptance before freezing a source High gap', () => {
   const detail: SystemDetail = {
     system: { id: 's', name: 'Test', status: 'RESULT_REVIEW', version: 1, revision: 1, context: {}, draft: {}, classification: {}, created_at: 0, updated_at: 0 },
     permissions: ['read', 'edit', 'review', 'manage'], controls: [], prd: null, round: null, baseline: null,
@@ -66,7 +101,7 @@ it('shows the source High failure and prevents accepting or freezing the unresol
   render(<QueryClientProvider client={new QueryClient()}><LocaleProvider><AuthContext.Provider value={{ user: { id: 'm', name: 'Manager', email: 'm@test', role: 'member', org_id: 'org' }, csrf: '', model_configured: false }}><Preferences><MemoryRouter><ImpactPanel detail={detail} /></MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
   expect(screen.getByText('系统安全评估结果：未通过')).toBeVisible()
   expect(screen.getByRole('button', { name: '冻结方案并收集双方确认' })).toBeDisabled()
-  expect(screen.getByRole('option', { name: '接受并承担已记录残余风险' })).toBeDisabled()
+  expect(screen.getByRole('option', { name: '接受并承担已记录残余风险' })).toBeEnabled()
 })
 
 it('expands source High clarification, includes it in high-risk filters and requires an individual owner decision', async () => {

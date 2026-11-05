@@ -48,7 +48,8 @@ def register_routes(app, current, get_db):
         # CAS protects source checks against concurrent assessment/plan revisions too.
         system.version += 1
         extra = operation() or {}
-        workflow.audit(db, user, batch, action, body)
+        audit_body = {**body, 'item_id': aggregate.id} if isinstance(aggregate, DeliveryItem) else body
+        workflow.audit(db, user, batch, action, audit_body)
         db.flush()
         result = {**workflow.batch_view(db, user, batch), **extra}
         if receipt_id:

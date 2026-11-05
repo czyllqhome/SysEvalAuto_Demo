@@ -75,8 +75,11 @@ export function useCommand(detail: SystemDetail) {
   const run = async (path: string, body: Record<string, unknown> = {}, method = 'POST') => {
     setBusy(true); setError('')
     try {
+      await client.cancelQueries({ queryKey: ['system', detail.system.id], exact: true })
       const latest = client.getQueryData<SystemDetail>(['system', detail.system.id]) ?? detail
       const result = await api<SystemDetail>(path, { method, body: { ...body, version: latest.system.version }, key: crypto.randomUUID() })
+      // A poll started during the command must not overwrite its newer response.
+      await client.cancelQueries({ queryKey: ['system', detail.system.id], exact: true })
       client.setQueryData(['system', detail.system.id], result)
       void client.invalidateQueries({ queryKey: ['systems'] })
       return result

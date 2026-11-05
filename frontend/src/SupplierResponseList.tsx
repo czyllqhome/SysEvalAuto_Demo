@@ -3,11 +3,11 @@ import { useLocale } from './i18n'
 import SupplierRequirement from './SupplierRequirement'
 import { answerComplete, answerNeedsAttention, blankAnswer } from './supplierAnswers'
 import type { Answer, Requirement } from './types'
-import './supplier-responses.css'
 
-export default function SupplierResponseList({ requirements, domains, highRiskIds = [], heading, answers, editable, update }: {
+export default function SupplierResponseList({ requirements, domains, highRiskIds = [], heading, answers, editable, update, feedback = {} }: {
   requirements: Requirement[]; domains: Record<string, string[]>; answers: Record<string, Answer>; editable: boolean;
   highRiskIds?: string[]; heading?: ReactNode;
+  feedback?: Record<string, { finding_id: string; reason: string }[]>;
   update: (id: string, values: Partial<Answer>) => void;
 }) {
   const { t } = useLocale()
@@ -55,7 +55,7 @@ export default function SupplierResponseList({ requirements, domains, highRiskId
       if (!visible.length) return null
       return <details className="supplier-domain-group" key={name} open>
         <summary><strong>{name}</strong><span>{t('已完成', 'Complete')} {rows.filter(r => answerComplete(answers[r.id])).length} / {rows.length}</span><span>{t('未填写', 'Unanswered')} {rows.filter(r => !answers[r.id]).length} / {rows.length}</span></summary>
-        <div className="supplier-responses">{visible.map(requirement => <SupplierRequirement key={requirement.id} requirement={requirement} highRisk={highRisk.has(requirement.id)} answer={answers[requirement.id] ?? blankAnswer()} answered={!!answers[requirement.id]} editable={editable} complete={answerComplete(answers[requirement.id])} update={values => update(requirement.id, values)} />)}</div>
+        <div className="supplier-responses">{visible.map(requirement => <SupplierRequirement key={requirement.id} requirement={requirement} feedback={feedback[requirement.id]} highRisk={highRisk.has(requirement.id)} answer={answers[requirement.id] ?? blankAnswer()} answered={!!answers[requirement.id]} editable={editable} complete={answerComplete(answers[requirement.id])} update={values => update(requirement.id, values)} />)}</div>
       </details>
     })}
     {!shown && <p>{t('没有符合筛选条件的需求。', 'No requirements match these filters.')}</p>}

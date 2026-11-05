@@ -45,7 +45,11 @@ def render(db, baseline):
                 lines += ['```json', json.dumps(f['contextual_assessment'], ensure_ascii=False, indent=2), '```']
             decision = p['decisions'].get(f['id'], {})
             lines.append(f"{label('客户决定', 'Customer decision')}: {decision.get('decision', '')} · {decision.get('reason', '')}")
-    lines += [f"\n# {label('例外及排除审查', 'Exception and exclusion review')}", p['decisions'].get('_exceptions', {}).get('reason', ''),
-              f"\n# {label('确认基线完整记录', 'Full confirmed baseline record')}", '```json',
+            if decision.get('residual_severity'):
+                lines.append(label('负责人接受后的风险等级：中风险；保留原始来源等级及报告结论。',
+                                   'Risk after owner acceptance: Medium; original source ratings and findings are retained.'))
+    if p['decisions'].get('_exceptions', {}).get('reason'):
+        lines += [f"\n# {label('例外及排除审查', 'Exception and exclusion review')}", p['decisions']['_exceptions']['reason']]
+    lines += [f"\n# {label('确认基线完整记录', 'Full confirmed baseline record')}", '```json',
               json.dumps(p, ensure_ascii=False, sort_keys=True, indent=2), '```']
     return '\n\n'.join(lines)

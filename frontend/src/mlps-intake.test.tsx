@@ -19,7 +19,7 @@ const resultFixture = {
     { field: 'service_rights_severity', severity: 1, level: 1 }, { field: 'service_public_severity', severity: 0, level: null }, { field: 'service_national_severity', severity: 0, level: null },
   ],
 }
-function setup(saved = {}, result = resultFixture, previewFailure = false, phase: 'all' | 'grading' | 'information' = 'all', removalFailure = false, permissions = ['edit']) {
+function setup(saved = {}, result = resultFixture, previewFailure = false, phase: 'all' | 'grading' | 'information' = 'all', removalFailure = false, permissions = ['edit'], client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   const writes: Record<string, unknown>[] = []
   let jobTopic = 'mlps_purpose'
   const detail = { system: { id: 'mlps', name: 'Authored name', version: 1, classification: {} } } as SystemDetail
@@ -31,9 +31,51 @@ function setup(saved = {}, result = resultFixture, previewFailure = false, phase
     if (options?.method === 'PUT') { writes.push(JSON.parse(String(options.body))); return new Response(JSON.stringify({ ...detail, system: { ...detail.system, version: 2 } })) }
     return new Response(JSON.stringify({ questions, saved, demo_template: demoFixture.template, legacy: true, permissions, catalog_id: 'catalog' }))
   }))
-  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><LocaleProvider><Language /><MLPSIntake detail={detail} phase={phase} /></LocaleProvider></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><MemoryRouter><LocaleProvider><Language /><MLPSIntake detail={detail} phase={phase} /></LocaleProvider></MemoryRouter></QueryClientProvider>)
   return writes
 }
+
+it('advances an unchanged saved questionnaire without writing and still saves edits and newer revisions', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const writes = setup({ answers: { system_name: 'Saved name' }, notes: {}, department_contacts: {}, frameworks: ['MLPS_LEVEL_2'], catalog_id: 'catalog' }, resultFixture, false, 'information', false, ['edit'], client)
+  await screen.findByText('从系统事实，到有依据的初步定级')
+  fireEvent.click(screen.getByText('保存并继续'))
+  await waitFor(() => expect(screen.getByRole('heading', { name: '系统部署与连接' })).toBeVisible())
+  expect(writes).toHaveLength(0)
+
+  fireEvent.click(screen.getByText('上一步'))
+  fireEvent.change(screen.getByLabelText('运营/使用该系统的单位名称？'), { target: { value: 'Authored edit' } })
+  fireEvent.click(screen.getByText('保存并继续'))
+  await waitFor(() => expect(screen.getByRole('heading', { name: '系统部署与连接' })).toBeVisible())
+  expect(writes).toHaveLength(1)
+  expect(writes[0]).toMatchObject({ answers: { org_name: 'Authored edit' }, version: 1 })
+
+  fireEvent.click(screen.getByText('上一步'))
+  fireEvent.click(screen.getByText('保存并继续'))
+  await waitFor(() => expect(screen.getByRole('heading', { name: '系统部署与连接' })).toBeVisible())
+  expect(writes).toHaveLength(1)
+
+  client.setQueryData(['system', 'mlps'], { system: { id: 'mlps', version: 3 } })
+  fireEvent.click(screen.getByText('上一步'))
+  fireEvent.click(screen.getByText('保存并继续'))
+  await waitFor(() => expect(writes).toHaveLength(2))
+  expect(writes[1]).toMatchObject({ version: 3, answers: { org_name: 'Authored edit' } })
+})
+
+it('keeps edited answers on the same step when saving fails', async () => {
+  setup({}, resultFixture, false, 'information')
+  await screen.findByText('从系统事实，到有依据的初步定级')
+  const originalFetch = globalThis.fetch
+  vi.stubGlobal('fetch', vi.fn((url, options) => options?.method === 'PUT'
+    ? Promise.resolve(new Response(JSON.stringify({ code: 'VERSION_CONFLICT' }), { status: 409 }))
+    : originalFetch(url, options)))
+  fireEvent.change(screen.getByLabelText('运营/使用该系统的单位名称？'), { target: { value: 'Keep this edit' } })
+  fireEvent.click(screen.getByText('保存并继续'))
+  await screen.findByRole('alert')
+  expect(screen.getByRole('heading', { name: '系统概况' })).toBeVisible()
+  expect(screen.getByLabelText('运营/使用该系统的单位名称？')).toHaveValue('Keep this edit')
+  expect(screen.getByText('有未保存更改')).toBeVisible()
+})
 it('replaces old screening with eight source sections and preserves authored text across languages', async () => {
   const writes = setup()
   await screen.findByText('从系统事实，到有依据的初步定级')

@@ -88,7 +88,7 @@ th { background: #f0f5fb; color: #536b88; }
 .workflow-nav button.active > span, .workflow-nav button.done > span { background: transparent; border-color: currentColor; color: inherit; }
 .finding-evidence .eyebrow, .finding-analysis .eyebrow, .exception-review > .eyebrow { color: #63748b; font-size: 10px; }
 .finding-evidence blockquote, .finding-analysis p, .exception-review > p, .finding > h4 { font-size: 13px; color: #465870; }
-.finding-decision label { font-size: 12px !important; }
+.finding-decision label { font-size: 12px ; }
 .finding-decision select, .finding-decision textarea { font-size: 13px; }
 @media (max-width: 700px) {
   .paper-panel, .finding { padding: 16px; }
@@ -223,7 +223,7 @@ th { background: #f0f5fb; color: #536b88; }
 .supplier-response .response-status { font-size: 14px; }
 .supplier-response .response-completion { font-size: 12px; width: 30px; height: 30px; }
 .supplier-response .response-body > p { font-size: 16px; line-height: 1.85; color: #40526a; }
-.supplier-response .response-body label, .supplier-response .form-grid label { font-size: 15px !important; line-height: 1.7; }
+.supplier-response .response-body label, .supplier-response .form-grid label { font-size: 15px ; line-height: 1.7; }
 .supplier-response .response-body input, .supplier-response .response-body select,
 .supplier-response .response-body textarea { font-size: 15px; line-height: 1.7; }
 .response-toolbar strong { font-size: 17px; }
@@ -256,7 +256,7 @@ th { background: #f0f5fb; color: #536b88; }
 .supplier-card-button > svg { grid-column: 3; grid-row: 1; align-self: center; }
 .supplier-card-button:hover { background: #edf4fc; }
 .supplier-answer-dialog { border-top: 0; padding: 0; }
-.supplier-answer-dialog label, .supplier-answer-dialog .form-grid label { font-size: 15px !important; }
+.supplier-answer-dialog label, .supplier-answer-dialog .form-grid label { font-size: 15px ; }
 .supplier-answer-dialog input, .supplier-answer-dialog select, .supplier-answer-dialog textarea { font-size: 15px; }
 .supplier-answer-dialog > p { font-size: 16px; line-height: 1.85; }
 @media (max-width: 1100px) { .supplier-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -277,7 +277,7 @@ th { background: #f0f5fb; color: #536b88; }
 .impact-review-page .impact-toolbar select, .impact-review-page .impact-toolbar input,
 .impact-review-page .exception-review p, .impact-review-page .exception-counts,
 .impact-detail select, .impact-detail textarea { font-size: 15px; }
-.impact-detail .finding-decision label { font-size: 15px !important; }
+.impact-detail .finding-decision label { font-size: 15px ; }
 .impact-detail .finding-analysis { grid-template-columns: 1fr; gap: 16px; }
 .risk-count-actions { display: flex; gap: 16px; flex-wrap: wrap; }
 .risk-count-actions button { font-size: 19px; color: #344f70; padding: 16px; border: 1px solid var(--rule); border-radius: 6px; background: #f3f7fc; cursor: pointer; }

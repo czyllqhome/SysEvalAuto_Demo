@@ -15,10 +15,12 @@ import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, Query, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import ValidationError
 from sqlalchemy import or_, select
@@ -34,6 +36,7 @@ from .db import (
     database_url, make_engine, make_sessions,
 )
 from .domain import DOMAINS, TOPICS, DomainError, digest, validate_prd
+from .document_export import DOCX_MEDIA_TYPE, render_docx
 from .worker import loop
 
 
@@ -92,6 +95,7 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         engine.dispose()
 
     app = FastAPI(title="Scope Assessment API", lifespan=lifespan)
+    app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=1)
     app.state.sessions, app.state.engine = sessions, engine
     attempts = defaultdict(deque)
 
@@ -195,7 +199,7 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
             if receipt:
                 if receipt.request_hash != request_hash:
                     raise DomainError("IDEMPOTENCY_CONFLICT", 409)
-                return receipt.response
+                return JSONResponse(receipt.response)
         if body.get("version") != system.version:
             raise DomainError("VERSION_CONFLICT", 409)
         extra = operation() or {}
@@ -214,7 +218,9 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         if receipt_id:
             db.add(Receipt(id=receipt_id, request_hash=request_hash, response=result))
         db.commit()
-        return result
+        # system_view and command extras are already JSON values (also stored in receipts).
+        # Avoid FastAPI recursively encoding the complete control catalog a second time.
+        return JSONResponse(result)
 
     @app.get("/api/v1/health")
     def health(db=Depends(get_db)):
@@ -290,6 +296,12 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         return {"email": invite.email, "system_name": db.get(System, invite.system_id).name,
                 "organization": db.get(Organization, invite.supplier_org_id).name}
 
+    @app.get('/api/v1/admin/dashboard')
+    def admin_dashboard(q: str = Query(default='', max_length=200), kind: Literal['', 'new', 'existing'] = '',
+                        user=Depends(current), db=Depends(get_db)):
+        from .admin_dashboard import overview
+        return overview(db, user, q=q, kind=kind)
+
     @app.get("/api/v1/systems")
     def list_systems(user=Depends(current), db=Depends(get_db)):
         statement = select(System)
@@ -346,7 +358,7 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
 
     @app.get("/api/v1/systems/{system_id}")
     def get_system(system_id: str, user=Depends(current), db=Depends(get_db)):
-        return service.system_view(db, service.system_for(db, user, system_id), user)
+        return JSONResponse(service.system_view(db, service.system_for(db, user, system_id), user))
 
     @app.delete('/api/v1/systems/{system_id}')
     def delete_assessment(system_id: str, body: dict, user=Depends(current), db=Depends(get_db)):
@@ -449,8 +461,8 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         from .db import LibraryRelease
         release = db.get(LibraryRelease, catalog_id)
         labels = {d['code']: [d['zh'], d.get('en') or d['zh']] for d in release.data['config']['domains']} if release else {}
-        return {"items": [control_snapshot(row) for row in rows[(page - 1) * 100:page * 100]],
-                "total": len(rows), "page": page, "domains": list(labels) or DOMAINS, "domain_labels": labels}
+        return JSONResponse({"items": [control_snapshot(row) for row in rows[(page - 1) * 100:page * 100]],
+                             "total": len(rows), "page": page, "domains": list(labels) or DOMAINS, "domain_labels": labels})
 
     @app.post("/api/v1/systems/{system_id}/controls")
     def select_control(system_id: str, body: dict, request: Request, user=Depends(current), db=Depends(get_db)):
@@ -640,7 +652,8 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         return command(request, db, user, system, body, "prd.revised", operation)
 
     @app.get("/api/v1/systems/{system_id}/prd-versions/{prd_id}/document")
-    def download_prd(system_id: str, prd_id: str, user=Depends(current), db=Depends(get_db)):
+    def download_prd(system_id: str, prd_id: str, format: Literal['markdown', 'docx'] = 'markdown',
+                     user=Depends(current), db=Depends(get_db)):
         system = service.system_for(db, user, system_id)
         prd = db.get(Prd, prd_id)
         if not prd or prd.system_id != system.id:
@@ -649,7 +662,13 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
             SupplierRound.prd_id == prd.id, SupplierRound.supplier_org_id == user.org_id
         )):
             raise DomainError("NOT_FOUND", 404)
-        return PlainTextResponse(prd.markdown, headers={"Content-Disposition": f'attachment; filename="PRD-{prd.id[:8]}-{prd.language}.md"'})
+        filename = f'PRD-{prd.id[:8]}-{prd.language}'
+        if format == 'docx':
+            return Response(render_docx(prd.markdown, language=prd.language, identifier=prd.id,
+                                        content_hash=prd.content_hash), media_type=DOCX_MEDIA_TYPE, headers={
+                'Content-Disposition': f'attachment; filename="{filename}.docx"', 'Cache-Control': 'no-store'})
+        return PlainTextResponse(prd.markdown, headers={
+            'Content-Disposition': f'attachment; filename="{filename}.md"', 'Cache-Control': 'no-store'})
 
     @app.get("/api/v1/systems/{system_id}/supplier-candidates")
     def supplier_candidates(system_id: str, user=Depends(current), db=Depends(get_db)):
@@ -737,11 +756,11 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         def operation():
             if round_.status != "open" or body.get("round_version") != round_.version:
                 raise DomainError("ROUND_CLOSED", 409)
+            from .negotiation import merge_answers
             answers = body.get("answers", {})
-            ids = {r["id"] for r in db.get(Prd, round_.prd_id).data["requirements"]}
-            if not isinstance(answers, dict) or not set(answers) <= ids or len(str(answers)) > 2_000_000:
+            if len(str(answers)) > 2_000_000:
                 raise DomainError("INVALID_FIELDS")
-            round_.draft = answers
+            round_.draft = merge_answers(round_, db.get(Prd, round_.prd_id), answers)
             round_.version += 1
         return command(request, db, user, system, body, "supplier.draft_saved", operation)
 
@@ -758,65 +777,77 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
 
     @app.post("/api/v1/systems/{system_id}/requirement-risk")
     async def requirement_risk(system_id: str, body: dict, user=Depends(current), db=Depends(get_db)):
-        from . import ai, ai_settings
-        from .domain import validate_report
+        import logging
+        import httpx
+        from . import ai, ai_settings, requirement_risk as risk
         system = service.system_for(db, user, system_id, write=user.role != 'vendor')
         if body.get('version') != system.version or body.get('report_id') != system.report_id:
             raise DomainError('VERSION_CONFLICT', 409)
+        language = body.get('language', 'zh')
+        if language not in ('zh', 'en'):
+            raise DomainError('INVALID_FIELDS')
         source = service.job_input(db, system, 'impact_analysis')
         rid = body.get('requirement_id')
-        requirements = [r for r in source['prd']['requirements'] if r['id'] == rid]
-        from .db import Report
-        current_report = db.get(Report, system.report_id)
-        has_risk = current_report and any(f['requirement_id'] == rid and f['severity'] in ('low', 'medium', 'high', 'critical') for f in current_report.data['findings'])
-        if not requirements or not (has_risk or source['answers'].get(rid, {}).get('implementation_status') in ('no', 'partial')):
+        if not isinstance(rid, str):
+            raise DomainError('INVALID_FIELDS')
+        from .db import Report, SupplierRound
+        current_report = db.get(Report, system.report_id) if system.report_id else None
+        round_ = db.get(SupplierRound, system.round_id)
+        if not current_report or current_report.submission_id != round_.submitted_id:
+            raise DomainError('STATE_CONFLICT', 409)
+        has_risk = any(f['requirement_id'] == rid and f['severity'] in ('low', 'medium', 'high', 'critical')
+                       for f in current_report.data['findings'])
+        if not (has_risk or source['answers'].get(rid, {}).get('implementation_status') in ('no', 'partial')):
             raise DomainError('INVALID_SOURCE_REFERENCE')
         version, report_id = system.version, system.report_id
-        from .db import Prd
-        originals = service.impact_control_originals(db, system, db.get(Prd, system.prd_id)).get(rid, [])
-        source = ai.redact_source({**source, 'prd': {'requirements': requirements}, 'answers': {rid: source['answers'][rid]}})
-        source['control_originals'] = originals
+        source = risk.prepare(ai.redact_source(source), rid)
         config = ai_settings.snapshot(db, system.org_id)
-        config['prompts']['impact_analysis'] += (' For this single requirement, describe potential security risks, '
-            'missing safeguards and possible consequences in impact using at most three short sentences. '
-            'Do not claim an actual vulnerability or incident is confirmed. Keep recommendation to one short sentence.')
+        config['prompts'][risk.KIND] = ai.default_instruction(risk.KIND, language)
         token = ai_settings.active_config.set(config)
         db.rollback()
+        usage = {}
         try:
-            output, usage = await ai.generate('impact_analysis', source, body.get('language', 'zh'), 'openrouter')
+            output, usage = await ai.generate(risk.KIND, source, language, 'openrouter')
+            finding = risk.validate(output)
+        except (DomainError, ValidationError, httpx.HTTPError) as exc:
+            code = (exc.code if isinstance(exc, DomainError) else
+                    'MODEL_SCHEMA_INVALID' if isinstance(exc, ValidationError) else 'MODEL_RETRYABLE')
+            logging.getLogger(__name__).warning('Single requirement analysis failed: system=%s requirement=%s code=%s', system_id, rid, code)
+            access.audit(db, user, 'impact.single_requirement_failed', {
+                'system_id': system_id, 'report_id': report_id, 'requirement_id': rid,
+                'code': code, 'usage': usage or getattr(exc, 'usage', {})})
+            db.commit()
+            if isinstance(exc, DomainError):
+                raise
+            raise DomainError(code, 503) from exc
         finally:
             ai_settings.active_config.reset(token)
         system = service.system_for(db, user, system_id, write=user.role != 'vendor')
         if system.version != version or system.report_id != report_id:
             raise DomainError('VERSION_CONFLICT', 409)
-        output = validate_report(output, requirements, source['answers'], contextual_source=source)
         access.audit(db, user, 'impact.single_requirement_analyzed',
                      {'system_id': system_id, 'report_id': report_id, 'requirement_id': rid, 'usage': usage})
         db.commit()
-        return {'report_id': report_id, 'requirement_id': rid, 'findings': output['findings']}
+        return {'report_id': report_id, 'requirement_id': rid, 'findings': [finding]}
 
     @app.post("/api/v1/systems/{system_id}/review-decisions")
     def review(system_id: str, body: dict, request: Request, user=Depends(current), db=Depends(get_db)):
         system = service.system_for(db, user, system_id, write=True)
+        def operation():
+            if body.get('advance_workflow') is True:
+                access.require_action(db, user, system, 'baseline.frozen')
+            return service.review_report(db, system, body, actor_id=user.id)
         return command(request, db, user, system, body, "report.reviewed",
-                       lambda: service.review_report(db, system, body))
+                       operation)
 
     @app.post("/api/v1/systems/{system_id}/negotiation-rounds")
     def negotiate(system_id: str, body: dict, request: Request, user=Depends(current), db=Depends(get_db)):
         system = service.system_for(db, user, system_id, write=True)
         def operation():
-            service.require_state(system, "RESULT_REVIEW", "NEGOTIATING", "FINAL_CONFIRMATION")
-            old = db.get(SupplierRound, system.round_id)
+            from .negotiation import open_round
             if not str(body.get("reason", "")).strip():
                 raise DomainError("REASON_REQUIRED")
-            old.status = "closed"
-            new = SupplierRound(system_id=system.id, supplier_org_id=old.supplier_org_id,
-                                prd_id=old.prd_id, snapshot={**old.snapshot, "instructions": body["reason"]}, draft=old.draft)
-            db.add(new)
-            db.flush()
-            system.round_id, system.report_id, system.baseline_id = new.id, None, None
-            system.status = "VENDOR_FILLING"
-            return {"round_id": new.id}
+            return open_round(db, system, body['reason'], actor_id=user.id, record_audit=False)
         return command(request, db, user, system, body, "negotiation.opened", operation)
 
     @app.post("/api/v1/systems/{system_id}/baselines")
@@ -843,7 +874,8 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
                        lambda: service.finalize(db, system, baseline, user))
 
     @app.get('/api/v1/baselines/{baseline_id}/document')
-    def final_document(baseline_id: str, user=Depends(current), db=Depends(get_db)):
+    def final_document(baseline_id: str, format: Literal['markdown', 'docx'] = 'markdown',
+                       user=Depends(current), db=Depends(get_db)):
         from .final_document import render
         baseline = db.get(Baseline, baseline_id)
         if not baseline:
@@ -853,7 +885,14 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
             raise DomainError('NOT_FOUND', 404)
         if system.baseline_id != baseline.id:
             raise DomainError('BASELINE_CHANGED', 409)
-        return PlainTextResponse(render(db, baseline), headers={
+        markdown = render(db, baseline)
+        if format == 'docx':
+            prd = db.get(Prd, baseline.payload['prd_id'])
+            return Response(render_docx(markdown, language=prd.language, identifier=baseline.id,
+                                        content_hash=baseline.content_hash), media_type=DOCX_MEDIA_TYPE, headers={
+                'Content-Disposition': f'attachment; filename="Final-PRD-{baseline.id[:8]}.docx"',
+                'Cache-Control': 'no-store'})
+        return PlainTextResponse(markdown, headers={
             'Content-Disposition': f'attachment; filename="Final-PRD-{baseline.id[:8]}.md"',
             'Cache-Control': 'no-store'})
 

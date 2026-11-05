@@ -1,3 +1,13 @@
+> 2026-11-05：统一全站字体、字号、控件与自适应内容宽度，减少宽屏留白。说明 / Unified interface: [docs/interface-design.md](docs/interface-design.md).
+
+> 2026-11-05：新增管理员管理工作台。admin 登录默认进入 `/dashboard`，原台账位于 `/assessments`；当前组织评估、供应商协同、整改、待办、系统等级及部门分布均使用真实记录。中英文切换保留原文，无迁移或数据重置。见 [工作台说明](docs/admin-dashboard.md)。
+> English: Admins now land on a live organization dashboard; the assessment ledger remains available separately.
+
+> 2026-11-05 整改闭环：负责人保存决定后自动下发被打回项；后续轮次只整改这些项，已接受承诺和逐项决定保持锁定。高风险经负责人逐项接受后按中风险记录，原始来源及报告不改写。全部接受后自动冻结基线，双方独立确认同一 hash 后自动转为待开发、开放最终稿下载。详见供应商协同说明。
+> English: Saving owner decisions opens a scoped remediation round or freezes an all-accepted baseline. Accepted risk is recorded as Medium without changing source ratings. Independent same-hash confirmation by both parties automatically finalizes development readiness.
+
+> 2026-11-05：复核页移除独立“例外与排除项审查”及其必填限制；历史说明、来源风险和独立双签保留。本页新增可撤销的负责人审查 Demo，填入三条用户示例，不自动保存或调用 AI。Retired the separate exception field; review Demo remains editable and requires individual High-risk acknowledgement.
+
 > 2026-11-05 补充：来源高风险的待澄清项也必须由负责人逐项决定；可接受并记录责任理由，或要求澄清。批量操作跳过这些项；决定绑定当前提交和报告，不修改来源风险、供应商答复或独立双签要求。
 >
 > English: source-High clarification requires an individual owner decision. Acceptance requires a rationale and is bound to the current submission/report; bulk actions skip it.
@@ -27,6 +37,12 @@
 > Demo copy: see [DEMO.md](DEMO.md) for this copy's path, independent database and startup command.
 
 # Scope: system assessment and supplier collaboration
+
+2026-11-05：新增六组 Amer Sports 虚构演示场景，供 admin 工作台展示评估阶段、供应商协同及整改状态。原有记录保留；详见 [演示数据说明 / Fictional demo scenarios](docs/amer-sports-demo.md)。
+
+2026-11-05：开发进度追踪已更新为总览、状态筛选、任务卡和独立人工验收；支持保存并提交、退回补充及重新打开原因展示。中英文、原始记录与双方基线保留，无数据库迁移。见 [开发追踪说明](docs/development-tracking.md)。
+
+English: Development tracking now combines progress, evidence submission, changes and independent acceptance in one workspace.
 
 ## Finding delivery evidence
 
@@ -114,7 +130,7 @@ New workspaces receive no automatically published controls. See the
 - Bilingual starter controls, domain/text search, level inheritance, project-only
   controls, reasoned exclusions, conditional candidates, and atomic CSV publication.
 - PRD business/control source coverage, immutable manual revisions, approval, and
-  Markdown downloads.
+  Word (.docx) downloads, with Markdown retained for preview and compatible API clients.
 - Supplier invitations and link reissue, independent accounts, conditional forms,
   autosave, immutable submissions, and documented negotiation rounds.
 - Impact findings with quoted evidence, customer decisions, exception review,
@@ -181,7 +197,7 @@ SQLite files, or isolated random PostgreSQL schemas when
 - [Document index](docs/README.md) links the application documentation.
 
 This release uses local account authentication. Enterprise OIDC, automatic email
-delivery, DOCX/PDF export, and production disaster-recovery/large-capacity validation
+delivery, PDF export, and production disaster-recovery/large-capacity validation
 remain separate deployment work. Configure HTTPS before enabling secure cookies
 and exposing the service beyond its loopback defaults.
 

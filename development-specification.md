@@ -1,3 +1,13 @@
+> 2026-11-05 管理工作台验收：管理员登录进入 `/dashboard`，非管理员和供应商不得访问汇总接口；台账保留 `/assessments`。覆盖真实组织数据、两类系统筛选、搜索、可展开供应商、任务跳转、刷新和中英文原文保留。风险接受不作为关闭，历史轮次/失效来源/已删除记录不纳入当前统计。详见 [管理工作台契约](docs/admin-dashboard.md)。
+> English: Administrator overview uses authenticated, organization-scoped current records; no runtime reset or workflow approval changes.
+
+> 2026-11-05 整改闭环：负责人保存决定后自动下发被打回项；后续轮次只整改这些项，已接受承诺和逐项决定保持锁定。高风险经负责人逐项接受后按中风险记录，原始来源及报告不改写。全部接受后自动冻结基线，双方独立确认同一 hash 后自动转为待开发、开放最终稿下载。详见供应商协同说明。
+> English: Saving owner decisions opens a scoped remediation round or freezes an all-accepted baseline. Accepted risk is recorded as Medium without changing source ratings. Independent same-hash confirmation by both parties automatically finalizes development readiness.
+
+> 2026-11-05：复核页移除独立“例外与排除项审查”及其必填限制；历史说明、来源风险和独立双签保留。本页新增可撤销的负责人审查 Demo，填入三条用户示例，不自动保存或调用 AI。Retired the separate exception field; review Demo remains editable and requires individual High-risk acknowledgement.
+
+> 2026-11-05：复核汇总表融合逐项风险辅助、负责人审查及双方确认入口，移除重复折叠卡片区；保留原筛选与按域表格样式。无自动 AI 调用，全部审查及独立双签门槛不变。Integrated table review retains explicit AI initiation and independent confirmation. 详见供应商协同说明。
+
 > 2026-11-05 补充：来源高风险的待澄清项也必须由负责人逐项决定；可接受并记录责任理由，或要求澄清。批量操作跳过这些项；决定绑定当前提交和报告，不修改来源风险、供应商答复或独立双签要求。
 >
 > English: source-High clarification requires an individual owner decision. Acceptance requires a rationale and is bound to the current submission/report; bulk actions skip it.
@@ -35,6 +45,27 @@
 > 2026-11-03 Demo: 项目机制和控制库写入入口已停用；使用直接评估、CN MLPS 来源库和 PRD v2。Current behavior: [更新说明 / Current contract](docs/direct-assessment-mlps.md).
 
 # System assessment and supplier collaboration: development specification
+
+## 2026-11-05: development tracking acceptance update
+
+开发追踪采用总览、状态筛选和可展开任务卡；供应商可显式保存并提交，必须使用保存响应的最新版本且覆盖全部验收条件。失败保留输入；筛选、折叠与语言切换不丢失草稿。客户独立核验、填写依据并逐项通过或退回，AI 不替代验收。重新打开原因与原审核记录分别保留，全量验收后才能完成；整改仍须客户复测。详见 [当前流程与实现](docs/development-tracking.md)。
+
+English: The development workspace preserves source/version checks and immutable evidence while streamlining submission and independent acceptance. No schema migration or runtime reset is needed.
+
+## 2026-11-05: Word download acceptance update
+
+The existing PRD and jointly confirmed final-document routes now accept `format=docx`.
+All PRD download buttons use Word; the default/explicit `format=markdown` API response
+continues to serve the saved web-preview source. The export preserves Chinese/English
+authored content, tables, lists, source references, generation-mode labels, embedded raster
+topology and final commitments/decisions/confirmation hashes. It uses the requested saved
+version, never the current template or editable draft. Existing records need no regeneration.
+Invalid formats return 422. Supplier round/organization boundaries, independent same-hash
+confirmation and baseline integrity checks apply equally to both formats. No database
+migration, model call, runtime-data reset or automatic revision is introduced.
+
+中文：供下载的 PRD 与双签最终稿默认按钮改为 Word（.docx）。Markdown 继续服务网页预览与
+兼容接口；导出保留原文、图片、来源及确认记录，不改变任何已保存版本、批准状态或基线指纹。
 
 ## 2026-10-29: administrator and project-manager authority
 
