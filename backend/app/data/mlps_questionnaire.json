@@ -250,8 +250,8 @@
   {
     "id": "B02",
     "key": "security_responsible_entity",
-    "zh": "是否已明确由哪一家单位对这个系统的安全负主要责任？",
-    "en": "Is it clear which organization is primarily responsible for this system’s security?",
+    "zh": "是否已明确由哪一家外部单位对这个系统的安全负主要责任？",
+    "en": "Is it clear which external organization is primarily responsible for this system’s security?",
     "hint": "boolean_3；否/不确定需说明责任划分",
     "rule": "M（边界校验）",
     "kind": "enum",
@@ -268,8 +268,8 @@
     ],
     "hint_en": "Provide factual evidence or a controlled reference. Unknown information remains pending review.",
     "source_id": "B02",
-    "example_zh": "说明由哪个运营主体承担安全责任，品牌业务团队、集团IT和供应商分别负责什么。",
-    "example_en": "Identify the responsible entity and the roles of brand business teams, group IT and suppliers."
+    "example_zh": "说明由哪一家外部单位承担约定的安全责任，以及与品牌业务团队、集团 IT 的责任边界。",
+    "example_en": "Identify the external organization with agreed security responsibilities and its boundaries with brand business teams and group IT."
   },
   {
     "id": "RETIRED-B03",
@@ -405,7 +405,7 @@
     "key": "external_network_access",
     "zh": "系统是否存在互联网可访问的服务、域名、IP、API、VPN入口或移动端入口？",
     "en": "External network access",
-    "hint": "enum：无、仅经VPN/零信任接入、存在受控互联网入口、存在公众可访问入口、不确定",
+    "hint": "enum：无、仅经VPN/零信任接入、存在受控互联网入口、公网可访问入口、不确定",
     "rule": "T",
     "kind": "enum",
     "options": [
@@ -420,14 +420,21 @@
       "None",
       "VPN/zero-trust only",
       "Controlled internet ingress",
-      "Publicly accessible ingress",
+      "Public internet ingress",
       "Unknown"
+    ],
+    "options_zh": [
+      "无",
+      "仅经VPN/零信任接入",
+      "存在受控互联网入口",
+      "公网可访问入口",
+      "不确定"
     ],
     "hint_en": "Provide factual evidence or a controlled reference. Unknown information remains pending review.",
     "source_id": "B06",
     "example_zh": "按当前系统实际情况选择，可多项时仅勾选已核实内容；尚未确认请选择不确定。",
     "example_en": "Choose verified facts for this system; use Unknown for unconfirmed information.",
-    "policy_hint_zh": "Amer Sports 内部等级下限：无公网访问为 1 级，受控互联网入口或公众可访问入口最低为 2 级，仅经 VPN/零信任接入为 3 级。",
+    "policy_hint_zh": "Amer Sports 内部等级下限：无公网访问为 1 级，受控互联网入口或公网可访问入口最低为 2 级，仅经 VPN/零信任接入为 3 级。",
     "policy_hint_en": "Amer Sports internal minimum: no internet ingress = level 1; controlled or public internet ingress = at least level 2; VPN/zero-trust only = level 3."
   },
   {
@@ -781,16 +788,16 @@
     "rule": "T/E",
     "kind": "enum",
     "options": [
-      "0–10,000 人",
-      "10,001–50,000 人",
-      "超过 50,000 人",
+      "0–9,999 人",
+      "10,000–99,999 人",
+      "100,000 人及以上",
       "不确定"
     ],
     "required": true,
     "options_en": [
-      "0–10,000 people",
-      "10,001–50,000 people",
-      "Over 50,000 people",
+      "0–9,999 people",
+      "10,000–99,999 people",
+      "100,000 people or more",
       "Unknown"
     ],
     "hint_en": "Count distinct natural persons, not records. Document the counting methodology and confidence. System and operator counts must remain separate.",
@@ -854,6 +861,18 @@
         0,
         10000
       ],
+      "0–9,999 人": [
+        0,
+        9999
+      ],
+      "10,000–99,999 人": [
+        10000,
+        99999
+      ],
+      "100,000 人及以上": [
+        100000,
+        null
+      ],
       "10,001–50,000 人": [
         10001,
         50000
@@ -864,23 +883,26 @@
       ]
     },
     "legacy_options": [
+      "0 人",
       "1–99,999 人",
       "100,000–999,999 人",
-      "0 人",
+      "1,000,000–9,999,999 人",
+      "10,000,000 人及以上",
       "1–100 人",
       "101–1,000 人",
       "100,001–999,999 人",
-      "1,000,000–9,999,999 人",
-      "10,000,000 人及以上",
       "0–1,000 人",
       "1,001–10,000 人",
       "10,001–100,000 人",
       "100,001–1,000,000 人",
-      "超过 1,000,000 人"
+      "超过 1,000,000 人",
+      "0–10,000 人",
+      "10,001–50,000 人",
+      "超过 50,000 人"
     ],
     "parent_key": "data_categories",
-    "policy_hint_zh": "Amer Sports 内部最低等级：0–10,000 人为 1 级，10,001–50,000 人为 2 级，超过 50,000 人为 3 级。历史范围若跨档，需重新选择。",
-    "policy_hint_en": "Amer Sports internal minimum: 0–10,000 people = level 1; 10,001–50,000 = level 2; over 50,000 = level 3. Re-select a historical band if it crosses these boundaries."
+    "policy_hint_zh": "按去重自然人数统计。Amer Sports 内部最低等级：0–9,999 人为 1 级，10,000–99,999 人为 2 级，100,000 人及以上为 3 级；与影响矩阵及其他内部下限取最高值。",
+    "policy_hint_en": "Count distinct people. Amer Sports internal grade minima: 0–9,999 people → level 1; 10,000–99,999 → level 2; 100,000 or more → level 3. Retain any higher impact-matrix or internal grade."
   },
   {
     "id": "D01.2",

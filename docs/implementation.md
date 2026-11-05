@@ -53,6 +53,68 @@
 
 # Implementation map
 
+2026-11-06 copy update: the information phase of `MLPSIntake` shows a “系统信息收集 / System information collection” heading and one bilingual sentence describing its five information topics. The grading-oriented eyebrow and former instructions are removed. Information chapter headings omit the generic navigation/save hint. `NarrativeRefinement` omits the small helper text beside its button; suggestion review, acceptance/undo and authored answers retain their existing behavior.
+
+## 2026-11-06: thirty-question information Demo snapshot
+
+The requested system's saved version 9/revision 1 supplies all 30 non-grading answers (8/11/2/3/6 by chapter), supporting text and department contacts. `information_source` separately pins source/version/time and canonical hashes. `grading_source` and its 14-question content remain unchanged; original seed metadata is retained as history. The former template is backed up under `.syseval/backups/`. The source assessment/database is read without mutation.
+
+Its 84,463-byte topology image is bundled as `data/mlps_demo_network.png`, with source ID/hash recorded outside the reusable template. The org-scoped `demo_template_for_org` exposes the asset as base64 only to the existing source organization. Template notes contain no assessment-owned attachment IDs. `MLPSIntake.fillDemo` copies active information assets through the existing audited/versioned `/mlps-intake/evidence` endpoint, substitutes returned target-owned references, then saves using the updated system version. Failed copying preserves authored input. Undo restores prior phase-specific values and contacts; immutable uploaded files remain available. Other phases retain their existing fill behavior. No migration or new endpoint.
+
+Offline coverage verifies all 30 fields, source/hash agreement, grading preservation, image validation, organization isolation, separate per-assessment evidence IDs, stale-version rejection, copy-before-save, failure retention and Undo.
+
+## 2026-11-06: answer choices in grading evidence cards
+
+`MLPSGradeResult.tsx` replaces the internal-minimum cards' synthetic level-1–5 sliders/ticks with read-only lists of the actual questionnaire choices. Selected answers receive a check/label and highlight; every alternative, including Unknown, remains fully visible. Enum labels use the bilingual questionnaire values and `options_zh` aliases; records/storage use their own `range_groups`. A saved value outside current choices is retained verbatim (or formatted as a numeric count) with a Saved answer marker. Result values and historical traces are rendered as stored and are never recalculated by this comparison view.
+
+The shared component covers early previews and confirmed snapshots. Existing field-edit links, grading calculations, source/version checks and confirmations remain intact. Lists have no input handlers or submission requests. Unit/browser regressions cover enum and volume alternatives, bilingual display, numeric/historical populations, read-only interaction and desktop/mobile overflow. No backend or runtime-data change.
+
+## 2026-11-06: compact grading layout and requested Demo snapshot
+
+`MLPSIntake.tsx` groups the ten short grading questions (G01–G06 and G09–G12) before the remaining four questions. `mlps-intake.css` uses two equal columns above 760px and a single column below. Source/display IDs remain fixed rather than renumbering the moved questions. Responsible-name and connected-grade children remain inside their parent cards; data categories, volume and impact judgments keep full width. Grading rules, source references and persistence contracts are unchanged.
+
+The requested assessment `024b425f-8b89-42b4-9e6d-a5884243c187` saved version 4, revision 1 was read from the Demo database without modifying it. Only grading answers/notes were copied into `mlps_demo_template.json`; non-grading answers, department contacts and original information-source metadata were preserved. A separate `grading_source` records organization, system/version/revision, UTC capture time, 14 visible main questions and canonical content hash. The previous template is retained under `.syseval/backups/`. The organization-scoped template API, reversible phase-scoped fill, explicit saving and independent confirmation gates remain intact. No migration, runtime-record rewrite or model call.
+
+Regression coverage checks capture provenance/hash, authored text preservation, stable reordered numbering, phase-limited Demo fill/undo, desktop widths 2391/1420 and English mobile 390 without overflow or writes.
+
+## 2026-11-06: enterprise population minima / 企业人数下限
+
+AmerSports-2.21 / engine 1.11.0 / AMER-INTERNAL/7 restores `AMER-POPULATION-MIN` under the user's revised enterprise policy. `backend/app/data/mlps_population_policy.json` (AMER-POPULATION/1) drives both backend minima and the rows in `/method`: 0–9,999 people → level 1; 10,000–99,999 → level 2; 100,000 or more → level 3. The questionnaire offers exactly these three bands and Unknown, with no standalone zero option. The new Demo fixture uses the current 100,000-or-more band. Bilingual labels and the supporting hint describe internal minima; they do not claim universal MLPS thresholds.
+
+Only a visible personal/sensitive-information selection activates the count minimum. New calculations retain the maximum of the impact matrix and all internal minima; unknown or missing counts remain pending. Historical numbers/ranges keep their stored values and bounds. A range crossing 10,000 or 100,000 shows its known lower bound and requires reselection before a new confirmation. Old million/ten-million alerts still use known lower bounds and do not add further grade minima. Reads/previews never rewrite confirmed classifications, PRDs or independent same-hash baselines. No database migration or runtime-data reset.
+
+Offline regressions cover 9,999/10,000 and 99,999/100,000, current/saved bands, hidden count scope, higher/unknown impact, lower reference rejection, persisted traces and read-only historical previews. The question labels and method rows are checked in Chinese and English on desktop/mobile.
+
+## Previous 2.20 policy (superseded): population as impact evidence / 原人数影响依据口径
+
+AmerSports-2.20 / engine 1.10.0 / AMER-INTERNAL/6 retires `AMER-POPULATION-MIN`. Current population choices are 0, 1–99,999, 100,000–999,999, 1,000,000–9,999,999 and 10,000,000 or more people, plus Unknown. These are application reporting bands. [GB/T 22240-2020 §6.3.2](https://www.iscn.org.cn/uploadfile/2025/0702/20250702030517349.pdf) treats population as impact evidence and provides no universal 50,000-person grading threshold. The application retains its existing million/ten-million scale-review alerts without converting them into grades.
+
+Historic exact numbers and ranges retain their bounds and authored values. A range spanning a scale-alert boundary requires clarification rather than assuming an exact count. Unknown population/applicability remains pending. Confirmed classifications, old population-floor traces, PRDs and baselines are not rewritten; only new previews/explicit confirmations use the new policy. Other internal minima and the user-specified AMER-MATRIX/1 remain active.
+
+`options_zh` supplies a display label for the stable `external_network_access` value `存在公众可访问入口`; the UI, result labels and newly rendered questionnaire facts show 公网可访问入口 / Public internet ingress. Existing answers, applicability facts and the level-2 ingress minimum retain the same key/value. The responsible-entity question and supporting-name label now ask about an external organization, preserving all saved names and source IDs. No migration or runtime-data reset.
+
+## 2026-11-06: current application grading matrix
+
+`backend/app/data/mlps_impact_matrix.json` is shared by `mlps_intake.py` and `GradingMethod.tsx`. AMER-MATRIX/1 changes only rights/severity=3 from level 2 to level 3, for both information and service impacts. Results now record `matrix_rule_version`, questionnaire AmerSports-2.19 and engine 1.9.0. The original standard/source identifier remains available as provenance; the changed matrix is labeled as application policy. Source documents are not rewritten.
+
+New previews and explicit confirmations use this matrix. Reads preserve stored confirmed classifications; selecting a level-2 library cannot confirm a new level-3 result. Existing unknown/rationale, organization, revision, source and baseline checks remain. No migration or runtime-data reset. Offline cases cover all nine cells in both dimensions, unknown/higher-result behavior and preview/reconfirmation against an old stored snapshot.
+
+`/method` removes dimension codes, examples, the no-harm/unknown explanation and the final recommendation explanation. Its public-ingress row now matches the existing level-2 internal minimum. Sidebar branding drops its English subtitle, administrator RBAC moves to Rules, and Audit logs has a separate Audit group; authorization stays unchanged.
+
+## 2026-11-06: AI prompt applicability and configuration
+
+`AISettings.tsx` and `ai-settings.css` implement the organization configuration workspace. The administrator-only, read-only `GET /api/v1/admin/ai-prompts` returns bilingual applicability metadata from `prompt_catalog.py`; the existing settings GET/PUT contract is unchanged. Template reads do not create a settings revision. The settings editor preserves the full saved prompt map, including historical custom text, and still submits the current optimistic revision. Document-only saves refresh that shared revision only when model/prompt values have not changed on the server; unsaved local configuration is retained.
+
+| Applicability | Templates / 用途 |
+|---|---|
+| Current, editable (5) | `prd_generation`, `impact_analysis`, `narrative_refinement:mlps_purpose`, `narrative_refinement:mlps_functions`, `narrative_refinement:mlps_scenarios` |
+| Current, system managed (2) | `requirement_risk` single-item residual-risk advice; `delivery_evidence` evidence/criterion assessment |
+| Historical compatibility (12) | `context_organization`, `prd_import_extraction`, `narrative_refinement:function_expansion`, `narrative_refinement:mlps_description`, plus eight original refinement topics (`goal`, `functions`, `people`, `responsibility`, `workflow`, `data`, `constraints`, `acceptance`) |
+
+当前默认 PRD、整轮影响分析和交付证据指令按任务拆分，消除混入旧 Q1–Q5 分级、应用说明或其他输出结构的指令。已有自定义模板与已排队任务快照不覆盖。单项残余风险及证据评估仍受原系统约束、来源/版本校验及独立人工审批限制。无数据库迁移、运行数据重置或自动模型调用。
+
+English: Task-specific defaults replace the former mixed-purpose instruction for new PRD, impact and delivery jobs. Saved custom templates and pinned jobs retain their authored instructions. The catalog documents retired UI entry points without removing compatibility APIs. Offline coverage checks catalog/questionnaire agreement, read authorization, historical text retention, task-specific defaults, revision conflicts and document-template revision coordination. See [interface behavior](interface-design.md#2026-11-06-ai-configuration-workspace--ai-配置工作台).
+
 2026-11-05：追加六组 Amer Sports 虚构演示数据，覆盖各评估阶段、供应商协同及六种整改状态；原记录逐表保留，脚本单事务且可重复执行。见 [场景及导入说明 / Demo fixtures](amer-sports-demo.md)。
 
 ## 2026-11-05: development tracking workspace

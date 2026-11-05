@@ -131,8 +131,8 @@ def render(data, source, language, pinned):
             if compact and question['kind'] == 'recovery_targets':
                 return '\n\n'.join(f"{key.upper()}: {answer[key]} {t('小时', 'hours')}" for key in ('rto', 'rpo') if answer.get(key) is not None)
             return json.dumps(answer, ensure_ascii=False)
-        if not zh and answer in question.get('options', []):
-            return question.get('options_en', question['options'])[question['options'].index(answer)]
+        if answer in question.get('options', []):
+            return question.get('options_zh' if zh else 'options_en', question['options'])[question['options'].index(answer)]
         return str(answer)
     for question in QUESTIONS:
         key = question['key']

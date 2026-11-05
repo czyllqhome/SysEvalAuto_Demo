@@ -1,3 +1,17 @@
+> 2026-11-06 信息 Demo 验收：保存当前评估版本 9 的 30 题、说明、联系人及网络拓扑素材，单独固定 information_source；原定级快照保留。示例不携带原附件 ID；信息阶段显式填入时复制为目标评估附件，再使用最新版本保存。复制失败保留原填写，撤销恢复原值；同组织权限、来源、修订与独立基线确认继续有效。旧模板备份，不修改原评估记录。
+>
+> 2026-11-06 定级结果选项对照：内部依据卡片用真实问卷选项替换 1–5 级刻度条，高亮已选项，完整展示其他选项；数据量两组独立、历史/数字答案保留、中英文同步。对照只读，已保存等级、原确认快照、来源与基线不改写。覆盖已确认结果无写入和移动端展示。
+>
+> 2026-11-06 定级布局与 Demo：G01–G06、G09–G12 前移为宽屏两列、手机单列，G07/G08/G13/G14 保持整行，原编号、条件字段和计算规则不变。用户指定评估已保存版本 4 的定级答案与理由固定为本页 Demo，保留来源 hash、组织隔离和旧模板备份；其他章节示例保留。填入及撤销不自动确认或保存定级。
+>
+> 2026-11-06 人数口径修订：按用户最新更正，0–9,999 人最低 1 级、10,000–99,999 人最低 2 级、100,000 人及以上最低 3 级，保留不确定，不提供单独“0 人”新选项。引擎 1.11.0 / AmerSports-2.21 / AMER-INTERNAL/7 恢复人数企业内部下限；后端与“分级方法”共享 AMER-POPULATION/1。影响矩阵或其他规则已知更高等级时不降低；人数未知、未填写或跨档历史范围不绕过确认。历史答案、来源、已确认结果、组织和版本隔离及独立双方基线保持不变。
+>
+> English: Current population minima are organization policy, shared by calculation and method guidance. Exact boundary, legacy-range, unknown, higher-impact, reference-library and immutable-history regressions are required. No migration or runtime-data reset.
+>
+> 2026-11-06 定级更新：当前应用矩阵对合法权益特别严重损害取 3 级，信息/服务两维度一致；原有未知、理由、较高等级和确认门槛继续有效。矩阵由后端计算与说明页共用版本化数据，历史已确认结果不自动重算。规则引擎 1.9.0，验收覆盖九个矩阵单元在两维度的结果、历史快照保留及二级参考库拦截。
+>
+> English: Application policy now maps particularly serious harm to rights to level 3. Shared versioned matrix data drives calculation and display; historical confirmations remain immutable.
+>
 > 2026-11-05 管理工作台验收：管理员登录进入 `/dashboard`，非管理员和供应商不得访问汇总接口；台账保留 `/assessments`。覆盖真实组织数据、两类系统筛选、搜索、可展开供应商、任务跳转、刷新和中英文原文保留。风险接受不作为关闭，历史轮次/失效来源/已删除记录不纳入当前统计。详见 [管理工作台契约](docs/admin-dashboard.md)。
 > English: Administrator overview uses authenticated, organization-scoped current records; no runtime reset or workflow approval changes.
 

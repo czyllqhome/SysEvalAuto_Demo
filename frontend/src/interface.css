@@ -14,6 +14,9 @@
 @import './delivery-workspace.css' layer(features);
 @import './rbac-matrix.css' layer(features);
 @import './admin-dashboard.css' layer(features);
+@import './people.css';
+@import './control-catalog.css';
+@import './ai-settings.css';
 
 :root {
   --font-ui: "Segoe UI", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;

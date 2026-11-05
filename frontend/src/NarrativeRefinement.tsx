@@ -40,7 +40,6 @@ export default function NarrativeRefinement({ topic, text, start, apply, childre
       setBusy(true); setError(''); setSuggestion(null)
       try { setJob(await start()) } catch (e) { setError(translate(e instanceof ApiError ? e.code : 'NETWORK_ERROR')); setBusy(false) }
     }}>{buttonLabel ?? t('AI 优化描述', 'Refine with AI')}</Button>
-    <p className="field-hint">{compact ? t('基于功能简述和已有说明扩写，审阅采纳后写入。', 'Expands the brief and existing description. Review before accepting.') : t('调用已配置的 OpenRouter 模型，围绕当前主题适度拓展和优化需求；新增建议标为待确认，采纳前请审查。', 'Uses your configured OpenRouter model to moderately expand and refine this topic. New proposals are marked for confirmation; review before accepting.')}</p>
     {undo && <Button variant="secondary" disabled={disabled || value !== undo.after} onClick={() => { apply(undo.before); setUndo(null) }}>{t('撤销本次采纳', 'Undo acceptance')}</Button>}
     </div></div>
     {(!compact || busy || suggestion || error) && <aside className="refinement-results paper-panel" aria-label={t('AI 优化结果', 'AI refinement result')} aria-live="polite" aria-busy={busy}>

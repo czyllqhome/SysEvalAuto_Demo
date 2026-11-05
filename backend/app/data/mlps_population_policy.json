@@ -1,0 +1,8 @@
+{
+  "version": "AMER-POPULATION/1",
+  "bands": [
+    { "lower": 0, "upper": 9999, "level": 1, "zh": "0–9,999 人", "en": "0–9,999 people" },
+    { "lower": 10000, "upper": 99999, "level": 2, "zh": "10,000–99,999 人", "en": "10,000–99,999 people" },
+    { "lower": 100000, "upper": null, "level": 3, "zh": "100,000 人及以上", "en": "100,000 people or more" }
+  ]
+}

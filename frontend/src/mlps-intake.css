@@ -17,6 +17,9 @@
 .mlps-section-heading h3 { font-size:24px; margin:8px 0; }.mlps-section-heading p { font-size:13px; }
 .mlps-fields { border:0; padding:0; margin:0; min-width:0; }
 .mlps-question { padding:26px; background:white; border:1px solid #dce4ef; border-top:0; }
+.mlps-grading-compact { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border-left:1px solid #dce4ef; }
+.mlps-grading-compact > .mlps-question { min-width:0; border-left:0; }
+@media(max-width:760px) { .mlps-grading-compact { grid-template-columns:minmax(0,1fr); } }
 .mlps-question-meta { display:flex; gap:10px; align-items:center; font-size:11px; color:#6d7d94; margin-bottom:12px; }.mlps-question-meta span:first-child { color:#2458a6; font-weight:700; letter-spacing:.8px; }
 .mlps-question-title { display:block; font-size:16px; font-weight:650; line-height:1.7; margin-bottom:8px; }
 .mlps-question .field-hint { margin:0 0 16px; font-size:12px; line-height:1.8; }.mlps-question textarea,.mlps-question select,.mlps-question input:not([type]) { width:100%; }
@@ -176,11 +179,18 @@
 .mlps-narrative-item { display: flex; gap: 8px; align-items: center; }
 .mlps-narrative-item > input { flex: 1; min-width: 0; }
 
-/* Grading evidence cards pair authored answers and computed grades above the scale. */
+/* Grading evidence cards pair saved answers with their computed grades. */
 .grade-score-card h4 { line-height: 1.6; overflow-wrap: anywhere; }
 .grade-score-answer, .grade-score-level { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .grade-score-answer { flex: 1; overflow-wrap: anywhere; }
 .grade-score-level { text-align: right; flex: 0 1 auto; }
 .grade-score-reading small { color: #63748d; font-size: 12px; }
 .grade-score-answer b { font-size: 16px; line-height: 1.5; }
+.grade-causes .grade-answer-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; list-style:none; padding:0; margin:18px 0; }
+.grade-answer-options > li { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; padding:10px 12px; border:1px solid #dce4ef; border-radius:7px; color:#52647d; font-size:14px; line-height:1.6; overflow-wrap:anywhere; background:#f8fafd; }
+.grade-answer-options > li[aria-current=true] { border-color:#7ca3df; background:#eaf2ff; color:#194b91; font-weight:600; }
+.grade-answer-options > li > span:first-child { min-width:0; }
+.grade-option-selected { display:inline-flex; align-items:center; gap:4px; flex-shrink:0; font-size:12px; }
+.grade-option-history { display:block; color:#64758e; font-size:12px; font-weight:400; }
+@media(max-width:600px) { .grade-causes .grade-answer-options { grid-template-columns:minmax(0,1fr); } }
 @media (max-width: 600px) { .grade-score-reading { flex-wrap: wrap; align-items: flex-start; } }

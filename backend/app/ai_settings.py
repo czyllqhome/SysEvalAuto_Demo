@@ -36,6 +36,13 @@ def configured(db, org_id):
 def register_routes(app, current, get_db):
     from . import prd_templates
     prd_templates.register_routes(app, current, get_db)
+
+    @app.get('/api/v1/admin/ai-prompts')
+    def prompts(user=Depends(current), db=Depends(get_db)):
+        from .prompt_catalog import catalog
+        access.require_admin(db, user)
+        return {'items': catalog()}
+
     @app.get('/api/v1/admin/ai-settings')
     def read(user=Depends(current), db=Depends(get_db)):
         access.require_admin(db, user)

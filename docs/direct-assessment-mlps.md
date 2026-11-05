@@ -135,3 +135,9 @@ final export, and per-requirement delivery AI are implemented. AI does not appro
 明确非云部署时云计算安全扩展要求归入不适用；云部署时自动排除的物理环境要求也采用相同口径。缺失、其他或不确定的部署不因未勾选云而自动判定不适用。匹配算法及控制范围没有更改，原有来源、版本和审批记录保留。统计卡片桌面五列、小屏换行，中英文文案同步。
 
 English: Counts now separate rule-based non-applicability from manually reasoned exemptions. Non-cloud deployment makes cloud extensions not applicable; unknown deployment remains pending. Counts retain pinned-catalog/reference-level boundaries and do not alter selection or approval records.
+
+## 2026-11-05：控制条目库浏览界面
+
+`/library` 现在以控制域、来源、风险、来源等级和关键词检索六字段控制条目，24 条一页展示，详情保留控制要求全文及文件行号。统计与筛选只使用当前接口返回的来源数据；没有新增评估判定或修改发布流程。管理员上传仍逐文件调用 `/source-controls/uploads`，保留原始来源、校验和事务边界。较早的只读发布仍可通过 `/library` 浏览。中英文界面采用通用“控制条目库 / Control library”称谓，来源缩写只作为内部兼容字段，已保存原文不改写。该变更不迁移数据库、不重置运行记录。
+
+English: Catalog browsing now offers domain navigation, source/risk/level filters, search, pagination and complete original-text details. Import and legacy read-only browsing keep their existing API contracts; no stored source, assessment revision or confirmation baseline is changed.

@@ -23,16 +23,19 @@ def complete():
 
 
 @pytest.mark.parametrize(('obj', 'severity', 'expected'), [
-    ('rights', 1, 1), ('rights', 2, 2), ('rights', 3, 2),
+    ('rights', 1, 1), ('rights', 2, 2), ('rights', 3, 3),
     ('public', 1, 2), ('public', 2, 3), ('public', 3, 4),
     ('national', 1, 3), ('national', 2, 4), ('national', 3, 5),
 ])
-def test_matrix(obj, severity, expected):
+@pytest.mark.parametrize('dimension', ['info', 'service'])
+def test_matrix(obj, severity, expected, dimension):
     answers, notes = complete()
     answers.update({key: 0 for key in CORE})
-    answers[f'info_{obj}_severity'] = severity
+    answers[f'{dimension}_{obj}_severity'] = severity
     result = evaluate(answers, notes)
     assert result['base_level'] == expected
+    assert result['business_information_level' if dimension == 'info' else 'system_service_level'] == expected
+    assert result['matrix_rule_version'] == 'AMER-MATRIX/1'
     assert result['final_confirmed_level'] is None
 
 
@@ -50,6 +53,61 @@ def test_unknown_zero_and_population_do_not_invent_grade():
     assert r['status'] == 'pending_review'
     del a['service_public_severity']
     assert not evaluate(a, notes)['is_lower_bound_only']
+
+
+def test_rights_level_three_keeps_unknown_review_and_higher_results():
+    answers, notes = complete()
+    answers.update(info_rights_severity=3, service_public_severity=9)
+    result = evaluate(answers, notes)
+    assert result['base_level'] == 3 and result['proposed_level'] == 3
+    assert result['is_lower_bound_only'] and result['status'] == 'pending_review'
+    answers.update(service_public_severity=3)
+    assert evaluate(answers, notes)['base_level'] == 4
+    answers['service_national_severity'] = 3
+    assert evaluate(answers, notes)['base_level'] == 5
+
+
+def test_new_matrix_preview_and_confirmation_preserve_historical_snapshot(application, monkeypatch):
+    import copy
+    from app.db import System
+    app, client = application
+    monkeypatch.setattr(methodology, 'LEGACY_FIXTURES_ENABLED', False)
+    register(client)
+    sid = client.post('/api/v1/systems', json={'name': 'Versioned rights matrix'}).json()['system']['id']
+    answers, notes = complete()
+    body = {'scheme': 'MLPS-INTAKE/1', 'answers': answers, 'notes': notes, 'frameworks': ['MLPS_LEVEL_2']}
+    confirmed = command(client, sid, 'classification-confirmations', body)
+    assert confirmed.status_code == 200, confirmed.text
+    # An old confirmed result used severity 3 -> level 2. Reading/previewing must not rewrite it.
+    with app.state.sessions.begin() as db:
+        system = db.get(System, sid)
+        legacy = copy.deepcopy(system.classification)
+        legacy['answers']['info_rights_severity'] = 3
+        legacy['assessment'].update(rule_engine_version='1.8.2', questionnaire_version='AmerSports-2.18')
+        legacy['assessment'].pop('matrix_rule_version', None)
+        for row in legacy['assessment']['rule_trace']:
+            if row['field'] == 'info_rights_severity':
+                row['severity'] = 3
+        system.classification = legacy
+    path = f'/api/v1/systems/{sid}'
+    before = client.get(path).json()['system']
+    answers['info_rights_severity'] = 3
+    preview = client.post(path + '/mlps-intake/preview', json=body)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()['assessment']['base_level'] == 3
+    assert preview.json()['assessment']['proposed_level'] == 3
+    assert preview.json()['effective_level'] == 'L3'
+    assert preview.json()['assessment']['rule_engine_version'] == '1.11.0'
+    assert client.get(path).json()['system']['classification'] == before['classification']
+    rejected = command(client, sid, 'classification-confirmations', body, expected=409)
+    assert rejected.status_code == 409 and rejected.json()['code'] == 'MLPS_REFERENCE_UNAVAILABLE'
+    assert client.get(path).json()['system']['classification'] == before['classification']
+    updated = command(client, sid, 'classification-confirmations', {**body, 'frameworks': ['MLPS_LEVEL_3']})
+    assert updated.status_code == 200, updated.text
+    current = updated.json()['system']
+    assert current['classification']['assessment']['base_level'] == 3
+    assert current['classification']['assessment']['matrix_rule_version'] == 'AMER-MATRIX/1'
+    assert current['revision'] > before['revision']
 
 
 def test_boundary_contradiction_and_hidden_answers_are_not_erased():
@@ -267,13 +325,13 @@ def test_description_split_uses_three_required_fields_and_keeps_legacy_text():
 
 
 @pytest.mark.parametrize(('band', 'expected'), [('0 人', set()), ('1–99,999 人', set()), ('100,000–999,999 人', set()), ('1,000,000–9,999,999 人', {'T02'}), ('10,000,000 人及以上', {'T02', 'T03'}), ('不确定', set())])
-def test_person_ranges_use_lower_bound_alerts_without_changing_grade(band, expected):
+def test_historical_person_ranges_keep_lower_bound_scale_alerts(band, expected):
     a, notes = complete()
     a.update(data_categories=['个人信息'], personal_info_count_system=band, personal_info_count_operator=20000000)
     r = evaluate(a, notes)
     assert {i['code'] for i in r['alerts']} == expected
     assert r['base_level'] == 2
-    assert r['status'] == ('pending_review' if band in ('1–99,999 人', '不确定') else 'preliminary_complete')
+    assert r['status'] == ('pending_review' if band in ('不确定', '1–99,999 人') else 'preliminary_complete')
 
 
 def test_person_visibility_contradictions_and_separate_volume_ranges():
@@ -299,13 +357,18 @@ def test_person_visibility_contradictions_and_separate_volume_ranges():
 
 
 def test_person_count_subquestion_has_finer_ranges_and_keeps_previous_bounds():
-    from app.mlps_intake import person_bounds, validate
+    from app.mlps_intake import POPULATION_POLICY, person_bounds, validate
     q = next(q for q in QUESTIONS if q['key'] == 'personal_info_count_system')
     assert q['parent_key'] == 'data_categories' and q['id'] == 'D01.1'
-    assert q['options'] == ['0–10,000 人', '10,001–50,000 人', '超过 50,000 人', '不确定']
+    assert q['options'] == ['0–9,999 人', '10,000–99,999 人', '100,000 人及以上', '不确定']
+    assert q['options'][:-1] == [band['zh'] for band in POPULATION_POLICY['bands']]
+    assert q['options_en'][:-1] == [band['en'] for band in POPULATION_POLICY['bands']]
+    assert all(person_bounds(band['zh']) == [band['lower'], band['upper']] for band in POPULATION_POLICY['bands'])
+    assert '0 人' not in q['options'] and '0 人' in q['legacy_options']
     assert person_bounds('101–1,000 人') == [101, 1000]
     assert person_bounds('1–99,999 人') == [1, 99999]
-    assert '1–99,999 人' not in q['options']
+    assert '超过 50,000 人' not in q['options']
+    assert '超过 50,000 人' in q['legacy_options']
     for value in q['options'] + q['legacy_options'] + [50000]:
         assert validate({'personal_info_count_system': value}, {})[0]['personal_info_count_system'] == value
 
@@ -362,6 +425,66 @@ def test_saved_demo_snapshot_is_valid_scoped_and_independent():
     original = demo['answers']['system_name']
     demo['answers']['system_name'] = 'Changed'
     assert demo_template_for_org(org)['answers']['system_name'] == original
+
+
+def test_grading_demo_retains_the_requested_assessment_snapshot_and_source_hash():
+    from app.domain import digest
+    from app.mlps_intake import DEMO_TEMPLATE, GRADING_FIELDS, evaluate_grading
+    template = DEMO_TEMPLATE['template']
+    source = DEMO_TEMPLATE['grading_source']
+    captured = {part: {key: value for key, value in template[part].items() if key in GRADING_FIELDS} for part in ('answers', 'notes')}
+    assert source['source_system_id'] == '024b425f-8b89-42b4-9e6d-a5884243c187'
+    assert source['source_org_id'] == DEMO_TEMPLATE['source_org_id']
+    assert source['source_system_version'] > 0 and source['source_revision'] > 0
+    assert source['source_hash'] == digest(captured)
+    assert source['visible_question_count'] == 14
+    assert captured['notes']['security_responsible_entity'] == 'PwC Cyber '
+    assert evaluate_grading(captured['answers'], captured['notes'])['status'] == 'preliminary_complete'
+    assert template['answers']['system_name'] == '户外运动与产品介绍AI客服'
+    assert template['department_contacts']['零售运营']['name'] == 'Alice'
+
+
+def test_information_demo_pins_all_thirty_answers_contacts_and_reusable_topology():
+    import hashlib
+    from app.domain import digest
+    from app.evidence_service import validate_file
+    from app.mlps_intake import DEMO_TEMPLATE, GRADING_FIELDS, demo_template_for_org, visible
+    source = DEMO_TEMPLATE['information_source']
+    demo = demo_template_for_org(DEMO_TEMPLATE['source_org_id'])
+    captured = {part: {key: value for key, value in demo[part].items() if key not in GRADING_FIELDS} for part in ('answers', 'notes')}
+    captured.update(department_contacts=demo['department_contacts'], evidence_assets=DEMO_TEMPLATE['evidence_assets'])
+    assert source['source_hash'] == digest(captured)
+    assert source['source_system_id'] == DEMO_TEMPLATE['grading_source']['source_system_id']
+    main = [q for q in QUESTIONS if not q.get('parent_key') and q['key'] not in GRADING_FIELDS and visible(q, demo['answers'])]
+    assert len(main) == source['visible_question_count'] == 30
+    assert source['section_counts'] == {'A': 8, 'B': 11, 'C': 2, 'D': 3, 'E': 6}
+    assert len(captured['answers']) == 30 and all(q['key'] in captured['answers'] for q in main)
+    assert demo['department_contacts']['零售运营']['contact_method'] == 'alice.retail@example.com'
+    asset = demo['evidence_assets'][0]
+    content = base64.b64decode(asset['content'])
+    assert hashlib.sha256(content).hexdigest() == DEMO_TEMPLATE['evidence_assets'][0]['sha256']
+    assert validate_file(asset['filename'], content)[1] == 'image/png'
+    assert 'source_evidence_id' not in asset and 'evidence:' not in str(demo['notes'])
+    assert demo_template_for_org('unrelated-organization') is None
+
+
+def test_demo_topology_upload_uses_independent_assessment_refs_and_revision_checks(owner):
+    from app.mlps_intake import DEMO_TEMPLATE, demo_template_for_org
+    _, client = owner
+    asset = demo_template_for_org(DEMO_TEMPLATE['source_org_id'])['evidence_assets'][0]
+    systems = [client.post('/api/v1/systems', json={'name': name}).json()['system'] for name in ('Demo target A', 'Demo target B')]
+    refs = []
+    for system in systems:
+        path = f"/api/v1/systems/{system['id']}"
+        uploaded = client.post(path + '/mlps-intake/evidence', json={**asset, 'version': system['version']})
+        assert uploaded.status_code == 200, uploaded.text
+        ref = uploaded.json()['mlps_evidence']['id']
+        refs.append(ref)
+        assert ref != DEMO_TEMPLATE['evidence_assets'][0]['source_evidence_id']
+        assert client.get(path + '/mlps-intake/evidence/' + ref).content == base64.b64decode(asset['content'])
+        assert client.post(path + '/mlps-intake/evidence', json={**asset, 'version': system['version']}).status_code == 409
+    assert refs[0] != refs[1]
+    assert client.get(f"/api/v1/systems/{systems[1]['id']}/mlps-intake/evidence/{refs[0]}").status_code == 404
 
 
 def test_transactions_are_informational_and_registered_users_relocate_without_data_changes():
@@ -440,7 +563,7 @@ def test_internal_network_minimum_is_separate_from_national_matrix(answer, floor
     assert result['base_level'] == 1
     assert result['organization_minimum'] == (floor or 1)
     assert result['proposed_level'] == (floor or 1)
-    assert result['organization_rule_version'] == 'AMER-INTERNAL/5'
+    assert result['organization_rule_version'] == 'AMER-INTERNAL/7'
     assert [row['field'] for row in result['organization_rule_trace'] if row['code'] == 'AMER-NET-MIN'] == (['external_network_access'] if floor else [])
 
 
@@ -519,25 +642,54 @@ def test_service_transaction_and_importance_minima(field, value, floor):
     assert any(row['field'] == field and row['level'] == floor for row in result['organization_rule_trace'])
 
 
-@pytest.mark.parametrize(('value', 'floor'), [(0, 1), (10000, 1), (10001, 2), (50000, 2), (50001, 3), ('0–10,000 人', 1), ('10,001–50,000 人', 2), ('超过 50,000 人', 3)])
-def test_population_minimum_exact_boundaries_and_current_ranges(value, floor):
+@pytest.mark.parametrize(('value', 'floor', 'alerts'), [(0, 1, set()), (1, 1, set()), (9999, 1, set()), (10000, 2, set()), (10001, 2, set()), (50000, 2, set()), (50001, 2, set()), (99999, 2, set()), (100000, 3, set()), (999999, 3, set()), (1000000, 3, {'T02'}), (9999999, 3, {'T02'}), (10000000, 3, {'T02', 'T03'}), ('0–9,999 人', 1, set()), ('10,000–99,999 人', 2, set()), ('100,000 人及以上', 3, set()), ('0 人', 1, set()), ('100,000–999,999 人', 3, set()), ('1,000,000–9,999,999 人', 3, {'T02'}), ('10,000,000 人及以上', 3, {'T02', 'T03'}), ('10,001–50,000 人', 2, set())])
+def test_population_minima_use_exact_boundaries_and_current_visible_scope(value, floor, alerts):
     answers, notes = complete()
     answers.update(info_rights_severity=1, data_categories=['个人信息'], personal_info_count_system=value)
     result = evaluate(answers, notes)
     assert result['base_level'] == 1 and result['proposed_level'] == floor
     assert result['status'] == 'preliminary_complete'
-    assert any(row['field'] == 'personal_info_count_system' and row['level'] == floor for row in result['organization_rule_trace'])
+    assert {row['code'] for row in result['alerts']} == alerts
+    population = next(row for row in result['organization_rule_trace'] if row['code'] == 'AMER-POPULATION-MIN')
+    assert population['level'] == floor and population['answer'] == value
+    assert result['population_rule_version'] == 'AMER-POPULATION/1'
     answers['data_categories'] = ['公开信息']
-    assert evaluate(answers, notes)['proposed_level'] == 1
+    hidden = evaluate(answers, notes)
+    assert hidden['proposed_level'] == 1
+    assert all(row['code'] != 'AMER-POPULATION-MIN' for row in hidden['organization_rule_trace'])
+
+
+@pytest.mark.parametrize(('value', 'lower_bound'), [('0–10,000 人', 1), ('1–99,999 人', 1), ('10,001–100,000 人', 2), ('超过 50,000 人', 2)])
+def test_historical_population_ranges_crossing_new_grade_boundaries_remain_pending(value, lower_bound):
+    answers, notes = complete()
+    answers.update(info_rights_severity=1, data_categories=['个人信息'], personal_info_count_system=value)
+    result = evaluate(answers, notes)
+    assert result['proposed_level'] == lower_bound
+    assert result['status'] == 'pending_review' and result['is_lower_bound_only']
+    assert any(row['code'] == 'POPULATION_RANGE_REVIEW' for row in result['issues'])
+    answers['personal_info_count_system'] = '100,000 人及以上'
+    assert evaluate(answers, notes)['status'] == 'preliminary_complete'
+
+
+@pytest.mark.parametrize('value', ['0–9,999 人', '10,000–99,999 人', '100,000 人及以上'])
+def test_population_minimum_cannot_lower_higher_impacts_or_resolve_unknowns(value):
+    answers, notes = complete()
+    answers.update(data_categories=['个人信息'], personal_info_count_system=value, info_public_severity=3)
+    higher = evaluate(answers, notes)
+    assert higher['base_level'] == 4 and higher['proposed_level'] == 4
+    answers['info_public_severity'] = 9
+    unknown = evaluate(answers, notes)
+    assert unknown['status'] == 'pending_review' and unknown['is_lower_bound_only']
+    assert any(row['code'] == 'QA02' for row in unknown['issues'])
 
 
 def test_historical_population_band_and_removed_business_choice_require_reconfirmation():
     from app.mlps_intake import validate
     answers, notes = complete()
-    answers.update(data_categories=['个人信息'], personal_info_count_system='10,001–100,000 人', critical_business='核心公共服务/关键生产')
+    answers.update(data_categories=['个人信息'], personal_info_count_system='超过 50,000 人', critical_business='核心公共服务/关键生产')
     assert validate(answers, notes)[0] == answers
     result = evaluate(answers, notes)
-    assert {'POPULATION_MIN_REVIEW', 'BUSINESS_MIN_REVIEW'} <= {i['code'] for i in result['issues']}
+    assert {'POPULATION_RANGE_REVIEW', 'BUSINESS_MIN_REVIEW'} <= {i['code'] for i in result['issues']}
     assert result['is_lower_bound_only'] and result['status'] == 'pending_review'
     q = next(q for q in QUESTIONS if q['key'] == 'critical_business')
     assert '核心公共服务/关键生产' not in q['options']
@@ -548,29 +700,76 @@ def test_new_internal_unknowns_remain_pending_and_high_matrix_still_wins():
     answers, notes = complete()
     answers.update(involves_transactions='不确定', public_service_nature='不确定', critical_business='不确定', data_categories=['个人信息'], personal_info_count_system='不确定')
     result = evaluate(answers, notes)
-    assert {'TRANSACTION_MIN_UNKNOWN', 'SERVICE_MIN_UNKNOWN', 'BUSINESS_MIN_UNKNOWN', 'POPULATION_MIN_UNKNOWN'} <= {i['code'] for i in result['issues']}
+    assert {'TRANSACTION_MIN_UNKNOWN', 'SERVICE_MIN_UNKNOWN', 'BUSINESS_MIN_UNKNOWN', 'POPULATION_UNKNOWN'} <= {i['code'] for i in result['issues']}
     assert result['is_lower_bound_only'] and result['status'] == 'pending_review'
     answers.update(involves_transactions='是', public_service_nature='是', critical_business='主要业务核心', personal_info_count_system='超过 50,000 人', info_public_severity=3)
     result = evaluate(answers, notes)
     assert result['base_level'] == 4 and result['proposed_level'] == 4 and result['organization_minimum'] == 3
 
 
-def test_population_minimum_reaches_persisted_classification(application):
+def test_population_minimum_is_persisted_and_rejects_a_lower_reference(application):
     _, client = application
     register(client)
-    detail = client.post('/api/v1/systems', json={'name': 'Population policy floor'}).json()
+    detail = client.post('/api/v1/systems', json={'name': 'Population impact evidence'}).json()
     path = f"/api/v1/systems/{detail['system']['id']}"
     config = client.get(path + '/mlps-intake').json()
     answers, notes = complete()
-    answers.update(info_rights_severity=1, data_categories=['个人信息'], personal_info_count_system='超过 50,000 人')
+    answers.update(info_rights_severity=1, data_categories=['个人信息'], personal_info_count_system='100,000 人及以上')
     payload = {'scheme': 'MLPS-INTAKE/1', 'version': detail['system']['version'], 'answers': answers, 'notes': notes, 'frameworks': ['MLPS_LEVEL_3'], 'catalog_id': config['catalog_id']}
+    rejected = client.post(path + '/classification-confirmations', json={**payload, 'frameworks': ['MLPS_LEVEL_2']})
+    assert rejected.status_code == 409 and rejected.json()['code'] == 'MLPS_REFERENCE_UNAVAILABLE'
     accepted = client.post(path + '/classification-confirmations', json=payload)
     assert accepted.status_code == 200, accepted.text
     classification = accepted.json()['system']['classification']
     assert classification['effective_level'] == 'L3'
     assessment = classification['assessment']
     assert assessment['base_level'] == 1 and assessment['organization_minimum'] == 3
+    assert any(row['code'] == 'AMER-POPULATION-MIN' and row['level'] == 3 for row in assessment['organization_rule_trace'])
+    assert classification['answers']['personal_info_count_system'] == '100,000 人及以上'
+    assert assessment['population_rule_version'] == 'AMER-POPULATION/1'
+
+
+def test_population_preview_does_not_rewrite_a_historical_confirmed_grade(owner):
+    import copy
+    from app.db import System
+    app, client = owner
+    sid = client.post('/api/v1/systems', json={'name': 'Historical population grade'}).json()['system']['id']
+    answers, notes = complete()
+    answers.update(info_rights_severity=1, data_categories=['个人信息'], personal_info_count_system='超过 50,000 人')
+    old = {'scheme': 'MLPS-INTAKE/1', 'effective_level': 'L1', 'answers': copy.deepcopy(answers), 'notes': notes,
+           'assessment': {'base_level': 1, 'proposed_level': 1, 'organization_minimum': 1, 'rule_engine_version': '1.10.0',
+                          'organization_rule_trace': []}}
+    with app.state.sessions.begin() as db:
+        db.get(System, sid).classification = old
+    path = f'/api/v1/systems/{sid}'
+    before = client.get(path).json()['system']
+    preview = client.post(path + '/mlps-intake/preview', json={'answers': {**answers, 'personal_info_count_system': '100,000 人及以上'}, 'notes': notes, 'frameworks': ['MLPS_LEVEL_3']})
+    assert preview.status_code == 200, preview.text
+    assessment = preview.json()['assessment']
+    assert assessment['proposed_level'] == 3
+    assert assessment['rule_engine_version'] == '1.11.0'
     assert any(row['code'] == 'AMER-POPULATION-MIN' for row in assessment['organization_rule_trace'])
+    after = client.get(path).json()['system']
+    assert after['classification'] == old == before['classification']
+    assert after['version'] == before['version'] and after['revision'] == before['revision']
+
+
+def test_external_responsibility_and_public_internet_copy_preserve_stable_answers():
+    from app.mlps_intake import validate
+    responsibility = next(q for q in QUESTIONS if q['key'] == 'security_responsible_entity')
+    network = next(q for q in QUESTIONS if q['key'] == 'external_network_access')
+    assert '哪一家外部单位' in responsibility['zh']
+    index = network['options'].index('存在公众可访问入口')
+    assert network['options_zh'][index] == '公网可访问入口'
+    assert network['options_en'][index] == 'Public internet ingress'
+    assert len(network['options_zh']) == len(network['options'])
+    answers, notes = complete()
+    answers['external_network_access'] = '存在公众可访问入口'
+    notes['security_responsible_entity'] = 'Original authored department / company'
+    assert validate(answers, notes) == (answers, notes)
+    result = evaluate(answers, notes)
+    row = next(row for row in result['organization_rule_trace'] if row['code'] == 'AMER-NET-MIN')
+    assert row['level'] == 2 and row['answer'] == '存在公众可访问入口'
 
 
 @pytest.mark.parametrize(('value', 'floor'), [('一般', 1), ('重要', 3), ('核心', 3), ('混合', 3)])
@@ -636,7 +835,7 @@ def test_data_volume_floor_is_persisted_and_does_not_replace_matrix(application)
 
 def test_refreshed_demo_has_current_population_answer():
     from app.mlps_intake import DEMO_TEMPLATE
-    assert DEMO_TEMPLATE['template']['answers']['personal_info_count_system'] == '超过 50,000 人'
+    assert DEMO_TEMPLATE['template']['answers']['personal_info_count_system'] == '100,000 人及以上'
 
 
 @pytest.mark.parametrize('answer', ['是', '否', '不确定'])
@@ -716,7 +915,7 @@ def test_network_minimum_never_reduces_higher_matrix_result(entry):
     result = evaluate(answers, notes)
     assert result['base_level'] == 3
     assert result['proposed_level'] == 3
-    assert result['rule_engine_version'] == '1.8.2'
+    assert result['rule_engine_version'] == '1.11.0'
 
 
 def test_structured_department_contact_roundtrip(owner):

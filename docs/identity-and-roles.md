@@ -176,3 +176,9 @@ current task operator can review independently submitted supplier delivery evide
 This action-specific allowance does not grant operators PRD, report or baseline approval.
 Suppliers can only upload and submit within their assigned delivery scope and cannot review.
 Revoked project access also blocks historical attachment downloads and receipt replays.
+
+## 2026-11-05: people and access workspace / 人员与权限工作台
+
+`/team` now presents a searchable account directory with organization-role and status filters, account counts, and an assessment access table. Administrators create accounts in a dialog and configure role, activation, administrator status and password reset in account details. Managers retain the read and assessment-grant scope exposed by `/people`; supplier accounts remain separate and cannot receive customer roles. The access table sends the selected assessment version with each change and refreshes the version after a successful save. Temporary passwords remain visible only in the current session. The page retains Chinese/English copy and authored names. UI-only change: no migration, automatic grant or runtime-data reset.
+
+`/team` 现展示账号目录、角色与状态筛选、账号概览及逐评估成员授权。账号创建与配置集中在弹窗，评估授权始终绑定当前评估版本；供应商和客户身份保持分离。移动端账号列表改为卡片式排列，避免文字被表格列压缩。

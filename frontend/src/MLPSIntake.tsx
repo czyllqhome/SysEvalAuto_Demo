@@ -17,8 +17,8 @@ import type { SystemDetail } from './types'
 
 type Value = Record<string, string | number> | string | number | string[] | Record<string, string>[] | Record<string, string>
 type Answers = Record<string, Value>
-export type Question = { id: string; key: string; zh: string; en: string; hint: string; hint_en: string; rule: string; kind: string; options: string[]; options_en: string[]; required: boolean; retired?: boolean; supporting_fields?: boolean; source_id?: string; parent_key?: string; policy_hint_zh?: string; policy_hint_en?: string; ai_topic?: string; range_groups?: Record<string, { values: string[]; zh: string[]; en: string[] }>; example_zh?: string; example_en?: string; legacy_options?: string[] }
-type Draft = { department_contacts?: Record<string, DepartmentContact>; answers?: Answers; notes?: Record<string, string>; frameworks?: string[]; catalog_id?: string }
+export type Question = { id: string; key: string; zh: string; en: string; hint: string; hint_en: string; rule: string; kind: string; options: string[]; options_en: string[]; options_zh?: string[]; required: boolean; retired?: boolean; supporting_fields?: boolean; source_id?: string; parent_key?: string; policy_hint_zh?: string; policy_hint_en?: string; ai_topic?: string; range_groups?: Record<string, { values: string[]; zh: string[]; en: string[] }>; example_zh?: string; example_en?: string; legacy_options?: string[] }
+type Draft = { department_contacts?: Record<string, DepartmentContact>; answers?: Answers; notes?: Record<string, string>; frameworks?: string[]; catalog_id?: string; evidence_assets?: { question: string; filename: string; content: string }[] }
 type EvidenceRef = { id: string; filename: string; sha256: string }
 function withoutEvidence<T>(value: T, ref: EvidenceRef): T {
   if (typeof value === 'string') return value.replaceAll(`${ref.filename} | evidence:${ref.id} | SHA-256:${ref.sha256}`, '').replaceAll(`evidence:${ref.id}`, '') as T
@@ -31,6 +31,7 @@ type Issue = { code: string; field?: string; zh: string; en: string }
 export type Assessment = { organization_minimum?: number | null; organization_rule_trace?: { code: string; field: string; subfield?: string; answer: string | number; level: number; zh: string; en: string }[]; status: string; base_level: number | null; proposed_level: number | null; business_information_level: number | null; system_service_level: number | null; special_principle_minimum: number | null; is_lower_bound_only: boolean; issues: Issue[]; alerts: Issue[]; rule_trace: { field: string; severity: number | null; level: number | null }[] }
 type Result = { grading_assessment?: Assessment; assessment: Assessment; controls_ready: boolean }
 const steps = [['GRADE', '优先定级', 'Grade first'], ['A', '系统概况', 'System overview'], ['B', '系统部署与连接', 'Deployment & connections'], ['C', '服务与规模', 'Service & scale'], ['D', '数据与个人信息', 'Data & privacy'], ['E', '业务连续性与影响分析', 'Business continuity & impact analysis']]
+const compactGradingKeys = new Set(['security_responsible_entity', 'system_interaction', 'external_network_access', 'involves_transactions', 'public_service_nature', 'critical_business', 'data_security_classification', 'cross_border_data', 'external_dependency_impact', 'safety_impact'])
 
 function personalInfoStatus(a: Answers) {
   const categories = a.data_categories as string[] | undefined
@@ -97,7 +98,7 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
   }) })
   let dataQuestionNumber = 0
   const visible = settings.questions.filter(q => !q.parent_key && isVisible(q, answers)).filter(q => q.kind !== 'severity' || q.key.endsWith('_rights_severity')).map(q => q.kind === 'severity' ? { ...q, id: q.key.startsWith('info_') ? 'E09' : 'E10' } : q.id.startsWith('D') ? { ...q, id: `D${String(++dataQuestionNumber).padStart(2, '0')}` } : q)
-  const answered = (q: Question) => ['data_categories', 'system_interaction'].includes(q.key) ? filled(answers[q.key]) && settings.questions.filter(child => child.parent_key === q.key && isVisible(child, answers)).every(child => filled(answers[child.key]) && !(child.key === 'personal_info_count_system' && answers[child.key] === '10,001–100,000 人')) : q.kind === 'recovery_targets' ? ['rto', 'rpo'].every(key => filled((answers[q.key] as Record<string, string | number> | undefined)?.[key])) : q.kind === 'volume_ranges' ? !!((answers[q.key] as Record<string, string> | undefined)?.records && (answers[q.key] as Record<string, string> | undefined)?.storage) : q.kind === 'severity' ? selectedImpactFields(q.key.startsWith('info_') ? 'info' : 'service', answers).length > 0 && selectedImpactFields(q.key.startsWith('info_') ? 'info' : 'service', answers).every(key => filled(answers[key])) : filled(answers[q.key])
+  const answered = (q: Question) => ['data_categories', 'system_interaction'].includes(q.key) ? filled(answers[q.key]) && settings.questions.filter(child => child.parent_key === q.key && isVisible(child, answers)).every(child => filled(answers[child.key])) : q.kind === 'recovery_targets' ? ['rto', 'rpo'].every(key => filled((answers[q.key] as Record<string, string | number> | undefined)?.[key])) : q.kind === 'volume_ranges' ? !!((answers[q.key] as Record<string, string> | undefined)?.records && (answers[q.key] as Record<string, string> | undefined)?.storage) : q.kind === 'severity' ? selectedImpactFields(q.key.startsWith('info_') ? 'info' : 'service', answers).length > 0 && selectedImpactFields(q.key.startsWith('info_') ? 'info' : 'service', answers).every(key => filled(answers[key])) : filled(answers[q.key])
   const progressQuestions = visible.filter(q => phase === 'grading' ? gradingFields.includes(q.key) : phase === 'information' ? !gradingFields.includes(q.key) : true)
   const complete = visible.filter(answered).length
   const progressComplete = progressQuestions.filter(answered).length
@@ -114,6 +115,7 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
     return position < 0 ? q : { ...q, id: `${section}${String(position + 1).padStart(2, '0')}` }
   }
   const current = visible.filter(q => inStep(q, step))
+  const compactGrading = step === 0 ? current.filter(q => compactGradingKeys.has(q.key)) : []
   const change = () => { sequence.current++; setDirty(true); setResult(null); setEarlyResult(false); setProblem('') }
   const update = (key: string, value: Value) => { setAnswers(a => ({ ...a, [key]: value })); change() }
   useEffect(() => {
@@ -191,9 +193,9 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
     const selections = Array.isArray(v) ? v as string[] : []
     const rangeValues = v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, string> : {}
     const hasOther = q.kind === 'multi' && selections.includes('其他') || q.kind === 'enum' && v === '其他'
-    const options = q.options.map((value, i) => ({ value, label: locale === 'zh' ? value : q.options_en[i] }))
+    const options = q.options.map((value, i) => ({ value, label: locale === 'zh' ? q.options_zh?.[i] ?? value : q.options_en[i] }))
     const oldChoices = q.kind === 'multi' ? selections : q.kind === 'enum' && (typeof v === 'string' || typeof v === 'number') ? [String(v)] : []
-    for (const old of oldChoices) if (!(q.key === 'personal_info_count_system' && old === '10,001–100,000 人') && !options.some(o => o.value === old)) options.push({ value: old, label: `${old} (${t('历史答案', 'saved answer')})` })
+    for (const old of oldChoices) if (!options.some(o => o.value === old)) options.push({ value: old, label: `${old} (${t('历史答案', 'saved answer')})` })
     const columns: Record<string, string[]> = { hosted: ['hosted_system_name', 'confirmed_level', 'evidence'], loss: ['scenario', 'amount_rmb', 'basis'], workload: ['average', 'peak', 'unit'], volume: ['amount', 'unit'] }
     const labels: Record<string, string> = { hosted_system_name: t('承载系统名称', 'Hosted system'), confirmed_level: t('已确认等级（1–5）', 'Confirmed level (1–5)'), evidence: t('证据引用', 'Evidence reference'), scenario: t('事故情景', 'Scenario'), amount_rmb: t('金额（人民币）', 'Amount (RMB)'), basis: t('估计依据', 'Estimation basis'), average: t('日均量', 'Daily average'), peak: t('日峰值', 'Daily peak'), unit: t('单位', 'Unit'), amount: t('数量', 'Amount') }
     const Container = q.parent_key ? 'div' : 'article'
@@ -202,7 +204,7 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
       <label id={`${q.key}-label`} htmlFor={q.key} className="mlps-question-title">{title}</label>
       {q.policy_hint_zh && <p className="field-hint">{locale === 'zh' ? q.policy_hint_zh : q.policy_hint_en}</p>}
       {!['enum', 'multi'].includes(q.kind) && <p className="field-hint" id={`${q.key}-hint`}>{hint || t('填写实际情况及责任归属。', 'Record the facts and responsibilities.')}</p>}
-      {q.kind === 'enum' ? <select id={q.key} value={q.key === 'personal_info_count_system' && v === '10,001–100,000 人' ? '' : String(v ?? '')} onChange={e => update(q.key, ['registered_users', 'personal_info_count_system'].includes(q.key) && /^\d+$/.test(e.target.value) ? Number(e.target.value) : e.target.value)}><option value="">{t('请选择', 'Select an answer')}</option>{options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+      {q.kind === 'enum' ? <select id={q.key} value={String(v ?? '')} onChange={e => update(q.key, ['registered_users', 'personal_info_count_system'].includes(q.key) && /^\d+$/.test(e.target.value) ? Number(e.target.value) : e.target.value)}><option value="">{t('请选择', 'Select an answer')}</option>{options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
         : q.kind === 'recovery_targets' ? <div className="mlps-recovery-targets">{['rto', 'rpo'].map(key => {
           const recovery = (v && typeof v === 'object' && !Array.isArray(v) ? v : {}) as Record<string, string | number>
           const value = recovery[key]
@@ -233,7 +235,7 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
         : <textarea id={q.key} rows={q.kind === 'evidence' ? 3 : 4} value={String(v ?? '')} onChange={e => update(q.key, e.target.value)} placeholder={q.kind === 'evidence' ? t('粘贴受控材料编号或链接，或上传文件。', 'Enter a controlled document ID/link, or upload a file.') : t('根据实际情况填写；未知事项请明确说明。', 'Describe the facts and identify any unknowns.')} />}
       {settings.questions.filter(child => child.parent_key === q.key && isVisible(child, answers)).map(child => field(child))}
       {q.key === 'system_purpose' && answers.system_description && <details><summary>{t('查看拆分前的原始系统描述', 'View the original combined system description')}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{String(answers.system_description)}</p></details>}
-      {q.key === 'security_responsible_entity' && v === '是' && <label>{t('主要负责单位或部门名称（必填）', 'Responsible organization or department (required)')}<input maxLength={500} value={notes[q.key] ?? ''} onChange={e => { setNotes(n => ({ ...n, [q.key]: e.target.value })); change() }} placeholder={t('填写实际负责的单位或部门全称', 'Enter the actual organization or department name')} /></label>}
+      {q.key === 'security_responsible_entity' && v === '是' && <label>{t('主要负责外部单位名称（必填）', 'Responsible external organization (required)')}<input maxLength={500} value={notes[q.key] ?? ''} onChange={e => { setNotes(n => ({ ...n, [q.key]: e.target.value })); change() }} placeholder={t('填写实际负责的外部单位全称', 'Enter the responsible external organization name')} /></label>}
       {q.key === 'system_owner' && selections.some(d => d !== '不确定') && <div className="mlps-department-contacts"><h4>{t('部门对接人', 'Department contacts')}</h4>{selections.filter(d => d !== '不确定').map(d => {
         const person = typeof contacts[d] === 'string' ? { name: contacts[d] as string } : contacts[d] ?? {}
         const departmentLabel = d === '其他' ? notes.system_owner || options.find(o => o.value === d)?.label || d : options.find(o => o.value === d)?.label ?? d
@@ -256,15 +258,25 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
     const demo = structuredClone(settings.demo_template)
     const roots = new Set(current.map(q => q.key))
     const keys = settings.questions.filter(q => !q.retired && (phase === 'all' || phase === 'information' ? phase === 'all' || !gradingFields.includes(q.key) : roots.has(q.key) || roots.has(q.parent_key ?? ''))).map(q => q.key)
-    setDemoUndo({ keys, answers, notes, contacts, frameworks })
     const activeKeys = new Set(keys)
     const nextAnswers = { ...Object.fromEntries(Object.entries(answers).filter(([key]) => !activeKeys.has(key))), ...Object.fromEntries(Object.entries(demo.answers ?? {}).filter(([key]) => activeKeys.has(key))) }
     const nextNotes = { ...Object.fromEntries(Object.entries(notes).filter(([key]) => !activeKeys.has(key))), ...Object.fromEntries(Object.entries(demo.notes ?? {}).filter(([key]) => activeKeys.has(key))) }
     const nextContacts = activeKeys.has('system_owner') ? demo.department_contacts ?? {} : contacts
-    setAnswers(nextAnswers); setNotes(nextNotes); setContacts(nextContacts)
-    if (phase === 'all') { setFrameworks(demo.frameworks ?? frameworks); setStep(0) }
-    change()
-    if (phase === 'information') await save(false, { ...body, answers: nextAnswers, notes: nextNotes, department_contacts: nextContacts })
+    setWaiting(true); setProblem('')
+    try {
+      for (const asset of phase === 'information' ? demo.evidence_assets ?? [] : []) {
+        if (!activeKeys.has(asset.question)) continue
+        const response = await run(`/systems/${detail.system.id}/mlps-intake/evidence`, asset) as SystemDetail & { mlps_evidence: EvidenceRef }
+        const ref = response.mlps_evidence
+        nextNotes[asset.question] = [nextNotes[asset.question], `${ref.filename} | evidence:${ref.id} | SHA-256:${ref.sha256}`].filter(Boolean).join('\n')
+      }
+      setDemoUndo({ keys, answers, notes, contacts, frameworks })
+      setAnswers(nextAnswers); setNotes(nextNotes); setContacts(nextContacts)
+      if (phase === 'all') { setFrameworks(demo.frameworks ?? frameworks); setStep(0) }
+      change()
+      if (phase === 'information') await save(false, { ...body, answers: nextAnswers, notes: nextNotes, department_contacts: nextContacts })
+    } catch (e) { setProblem(translate(e instanceof ApiError ? e.code : 'NETWORK_ERROR')) }
+    finally { setWaiting(false) }
   }
   async function undoDemo() {
     if (!demoUndo || locked) return
@@ -292,13 +304,14 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
   if (phase === 'result') return <section>{(error || problem) ? <Notice error>{error || problem}</Notice> : <p>{t('正在计算定级结果…', 'Calculating grade…')}</p>}<Button onClick={() => navigate(`/systems/${detail.system.id}/classification`)}>{t('返回系统定级', 'Back to grading')}</Button></section>
   return <section className="mlps-intake">
     {demoHost ? createPortal(demoActions, demoHost) : demoActions}{editable && <Button variant="secondary" disabled={locked} onClick={() => void loadLatest()}>{t('加载最新控制库', 'Load latest controls')}</Button>}
-    <header className="mlps-header"><div><span className="eyebrow">MLPS 2.0 / INFORMATION COLLECTION</span><h2>{t('从系统事实，到有依据的初步定级', 'From system facts to evidence-based grading')}</h2><p>{t('先回答影响等级的问题并查看初步等级，再补齐其余信息；确认应用说明后按等级匹配控制项。', 'Answer grading questions first, review the preliminary grade, then complete the remaining information. Match controls by grade after confirming the brief.')}</p></div></header>
+    <header className="mlps-header">{phase === 'information' ? <div><h2>{t('系统信息收集', 'System information collection')}</h2><p>{t('收集系统概况、部署连接、服务规模、数据处理及业务连续性信息，为安全评估和控制匹配提供依据。', 'Collect system overview, deployment and connections, service scale, data handling, and business continuity information to support security assessment and control matching.')}</p></div> : <div><span className="eyebrow">MLPS 2.0 / INFORMATION COLLECTION</span><h2>{t('从系统事实，到有依据的初步定级', 'From system facts to evidence-based grading')}</h2><p>{t('先回答影响等级的问题并查看初步等级，再补齐其余信息；确认应用说明后按等级匹配控制项。', 'Answer grading questions first, review the preliminary grade, then complete the remaining information. Match controls by grade after confirming the brief.')}</p></div>}</header>
     {settings.legacy && <Notice>{t('旧版分级分类答案已保留。请按新问卷重新填报，保存变更会产生修订并使后续结果待重新确认。', 'Legacy answers are preserved. Complete this new questionnaire; saving changes creates a revision and requires downstream reconfirmation.')}</Notice>}
     {(error || problem) && <Notice error>{error || problem}</Notice>}
     <div className="mlps-layout"><aside className="mlps-rail"><div className="mlps-progress"><strong>{progressComplete}<small> / {progressQuestions.length}</small></strong><span>{t('已填写问题', 'Questions answered')}</span><progress value={progressComplete} max={progressQuestions.length} /></div><nav aria-label={t('问卷章节', 'Questionnaire sections')}>{steps.map(([code, zh, en], i) => { if (phase === 'grading' && i !== 0 || phase === 'information' && i === 0) return null; const qs = visible.filter(q => inStep(q, i)); const count = qs.filter(answered).length; return <button key={code} onClick={() => setStep(i)} aria-current={step === i ? 'step' : undefined} className={step === i ? 'active' : ''}><span className="mlps-step-letter">{count === qs.length && count > 0 ? <Check size={15} /> : i === 0 ? '1' : code}</span><span>{t(zh, en)}<small>{count} / {qs.length}</small></span></button> })}</nav><p>{t('规则草稿 · 不调用模型', 'Rule-based draft · No model call')}</p></aside>
-    <main className="mlps-main"><div ref={sectionHeading} className="mlps-section-heading"><span className="eyebrow">{step < steps.length ? `${steps[step][0]} / ${phase === 'information' ? '05 TOPICS' : phase === 'grading' ? 'GRADING' : '06 STEPS'}` : 'REVIEW / MATRIX'}</span><h3>{step < steps.length ? t(steps[step][1], steps[step][2]) : t('检查信息与初步定级', 'Review information and preliminary grade')}</h3><p>{step === 0 ? t('分别选择受侵害客体和损害程度，取矩阵最高等级。未核实的客体仍按未知处理。', 'Choose affected parties and severities; use the highest matrix grade. Unverified parties remain unknown.') : t('可随时切换章节；下一步会保存草稿。带“必填”的信息用于形成完整初步建议。', 'Move freely between sections; Next saves your draft. Required fields support a complete preliminary recommendation.')}</p></div>
+    <main className="mlps-main"><div ref={sectionHeading} className="mlps-section-heading"><span className="eyebrow">{step < steps.length ? `${steps[step][0]} / ${phase === 'information' ? '05 TOPICS' : phase === 'grading' ? 'GRADING' : '06 STEPS'}` : 'REVIEW / MATRIX'}</span><h3>{step < steps.length ? t(steps[step][1], steps[step][2]) : t('检查信息与初步定级', 'Review information and preliminary grade')}</h3>{step === 0 && <p>{t('分别选择受侵害客体和损害程度，取矩阵最高等级。未核实的客体仍按未知处理。', 'Choose affected parties and severities; use the highest matrix grade. Unverified parties remain unknown.')}</p>}</div>
     <fieldset disabled={locked} className="mlps-fields">
-      {current.map(field)}
+      {compactGrading.length > 0 && <div className="mlps-grading-compact">{compactGrading.map(field)}</div>}
+      {current.filter(q => !compactGrading.includes(q)).map(field)}
     </fieldset>
     <footer className="mlps-footer"><span role="status">{step === steps.length - 1 && progressComplete < progressQuestions.length ? t(`还有 ${progressQuestions.length - progressComplete} 个问题待填写`, `${progressQuestions.length - progressComplete} questions remain`) : dirty ? t('有未保存更改', 'Unsaved changes') : t('草稿已载入 / 已保存', 'Draft loaded / saved')}</span><div><Button variant="secondary" disabled={step === (phase === 'information' ? 1 : 0) || locked} onClick={() => setStep(step - 1)}><ArrowLeft size={15} />{t('上一步', 'Back')}</Button><Button variant="secondary" disabled={locked || !frameworks.length} onClick={() => void save()}>{t('保存草稿', 'Save draft')}</Button>{phase === 'all' && step < steps.length - 1 && <Button variant="secondary" disabled={locked || !frameworks.length || complete < visible.length} onClick={async () => { if (await save() && await preview()) setStep(steps.length) }}>{t('查看系统等级', 'View system grade')}<ArrowRight size={15} /></Button>}{step < steps.length && <Button disabled={locked || !frameworks.length || step === steps.length - 1 && complete < visible.length} onClick={async () => { if (await save(false, body, true)) { if (step === 0) { if (phase === 'grading') navigate(`/systems/${detail.system.id}/grade-result`); else if (await preview()) setEarlyResult(true) } else if (phase === 'information' && step === steps.length - 1) { try { await run(`/systems/${detail.system.id}/information-confirmations`, body); setDirty(false); navigate(`/systems/${detail.system.id}/controls`) } catch { /* Validation errors remain visible for correction. */ } } else if (step < steps.length - 1 || await preview()) setStep(step + 1) } }}>{step === 0 ? t('先计算系统等级', 'Calculate grade first') : phase === 'information' && step === steps.length - 1 ? t('确认系统信息', 'Confirm system information') : step === steps.length - 1 ? t('下一步：查看系统等级', 'Next: view system grade') : t('保存并继续', 'Save & continue')}<ArrowRight size={15} /></Button>}</div></footer></main></div>
   </section>

@@ -1,3 +1,29 @@
+> 2026-11-06 信息页说明：显示“系统信息收集”标题，下面保留一句话介绍收集内容；移除各章节标题下的通用切换/保存提示，以及 AI 优化描述按钮旁的小字解释。中英文同步，已填写内容与 AI 审阅、采纳及撤销流程保留。
+>
+> 2026-11-06 信息 Demo：评估 `024b425f` 保存版本 9、修订 1 的 30 道信息题已固定为最新示例，章节数量为 A/B/C/D/E = 8/11/2/3/6，包含原文、部门联系人及网络拓扑图。`information_source` 单独记录来源时间、版本和内容 hash；原 14 题定级 Demo 保留。旧模板备份在 `.syseval/backups/`。
+>
+> 拓扑图以独立 Demo 素材保存，原评估文件保留。只有同组织有权限的评估可读取 Demo。信息收集阶段显式填入时，通过现有附件接口创建目标评估自己的引用，再以最新版本保存 30 题；附件失败时保留原填写。撤销恢复原答案和联系人，已上传文件作为不可变附件保留。不会复制原评估的附件 ID，也不自动确认系统信息或基线。
+>
+> English: The information Demo pins 30 answers, notes, contacts and the topology image from saved version 9. Information and grading sources have separate metadata/hashes. Explicit information fill copies the bundled image through the existing versioned upload API before saving; Undo restores authored values. Organization and evidence boundaries remain intact.
+>
+> 2026-11-06 定级结果：内部规则依据卡片移除 1–5 级刻度条，改为原问卷完整选项对照，明确标记已选项；记录数量和容量分别展示各自选项。历史范围或数字答案保留并标注，列表只读。卡片仍展示已保存的计算等级和判断依据，中英文同步。
+>
+> English: Internal grading-basis cards show actual questionnaire choices instead of synthetic grade scales. The selected answer is highlighted; alternatives and Unknown remain visible, with saved historical values preserved. This comparison is read-only and does not recalculate confirmed results.
+>
+> 2026-11-06 定级布局：G01–G06、G09–G12 十道简短题集中在前，宽屏两列、760px 及以下单列；G07 数据类别、G08 数据量和 G13/G14 影响判断保留整行。原题号、条件子问题、答案键、规则与确认流程不变。
+>
+> 本页 Demo 已按评估 `024b425f` 已保存版本 4 的 14 道定级主问题固定，包含对接等级、人数及原始判断理由；外部负责单位保留原文。`grading_source` 单独记录来源版本、修订、时间和内容 hash，其他信息章节及部门联系人示例保持原模板。旧模板备份在 `.syseval/backups/`。填入/撤销只作用于当前阶段；定级 Demo 不自动保存或确认评估。
+>
+> English: Ten compact grading questions move first in two desktop columns and one mobile column. Original numbering, conditional fields and all rules remain intact. The grading Demo pins the requested assessment's saved version 4 with source metadata/hash, preserving all other information examples. Grading fill/undo remains local and scoped to this phase.
+>
+> 2026-11-06：当前 AmerSports-2.21 / 引擎 1.11.0 / AMER-INTERNAL/7。按用户确认的企业内部规则，个人信息人数改为三个连续分档：0–9,999 人最低 1 级、10,000–99,999 人最低 2 级、100,000 人及以上最低 3 级，另设不确定；不再提供单独“0 人”新选项。与影响矩阵和其他内部下限取最高值。“分级方法”与后端共用 AMER-POPULATION/1 配置。责任单位与公网入口文案保持当前版本，原保存键值与历史文本保留。
+>
+> English: Population now establishes an organization-specific grade minimum: 0–9,999 → level 1; 10,000–99,999 → level 2; 100,000 or more → level 3, plus Unknown. The engine and method page share versioned policy data and retain any higher impact/internal grade. These are enterprise minima, not universal MLPS thresholds. Historical answers and confirmed results remain unchanged; a historical range crossing a new grade boundary requires reselection before a new confirmation.
+>
+> 2026-11-06 前次矩阵更新：AmerSports-2.19 / 规则引擎 1.9.0。应用矩阵 AMER-MATRIX/1 将“合法权益 × 特别严重损害”由 2 级改为 3 级，业务信息和系统服务同步采用。新预览及显式确认使用新规则，历史已确认结果、原始来源材料和基线保留。
+>
+> English: Particularly serious harm to rights now maps to level 3 under the application policy. New previews and explicit confirmations use this version; stored historical results remain unchanged.
+>
 > 2026-11-05：AmerSports-2.18 / 规则引擎1.8.2 移除原定级 G02（来源 B03，`independent_business`）及其 QA01 边界复核规则。定级页现为14题，展示编号顺延为 G01–G14；缺失、否、不确定均不再触发该题的必填或复核。历史答案、说明、已确认结果及基线保留；重新计算使用新规则。责任主体校验继续有效，无需数据迁移或重置。
 >
 > English: The former G02 independent-business question and its QA01 review rule are retired. Grading now has 14 questions. Historical answers and confirmed snapshots remain intact; new calculations ignore this field. Responsibility checks remain active.
@@ -122,7 +148,7 @@ E 连续性、F 核心影响、G 监管复核、H 材料填写。73 个字段保
 ## 计算及边界
 
 MLPS-INTAKE/1 与旧算法完全分开。F07–F12 分别命中 rights/public/national 矩阵，
-先取业务信息和系统服务各自最大值，再取两者最高等级。合法权益特别严重对应二级；
+先取业务信息和系统服务各自最大值，再取两者最高等级。合法权益特别严重在原始来源矩阵中对应二级，当前应用按 AMER-MATRIX/1 对应三级；
 公共利益特别严重对应四级，国家安全特别严重对应五级。全零不产生一级，未知只给已知下限。
 所有六项均要求理由；责任边界、必填概况、H01/H02 依据缺失阻止确认。
 

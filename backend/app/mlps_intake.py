@@ -2,6 +2,7 @@
 import json
 import copy
 import math
+import base64
 from pathlib import Path
 
 from .control_rules import invalid, normalize_facts
@@ -13,16 +14,25 @@ DEMO_TEMPLATE = json.loads((Path(__file__).parent / 'data/mlps_demo_template.jso
 
 
 def demo_template_for_org(org_id):
-    return copy.deepcopy(DEMO_TEMPLATE['template']) if org_id == DEMO_TEMPLATE['source_org_id'] else None
+    if org_id != DEMO_TEMPLATE['source_org_id']:
+        return None
+    template = copy.deepcopy(DEMO_TEMPLATE['template'])
+    template['evidence_assets'] = [{**{key: asset[key] for key in ('question', 'filename')},
+                                    'content': base64.b64encode((Path(__file__).parent / 'data' / asset['file']).read_bytes()).decode('ascii')}
+                                   for asset in DEMO_TEMPLATE.get('evidence_assets', [])]
+    return template
 
 
 GRADING_FIELDS = frozenset(json.loads((Path(__file__).parent / 'data/mlps_grading_fields.json').read_text(encoding='utf-8')))
 
 
-MATRIX = {'rights': {1: 1, 2: 2, 3: 2}, 'public': {1: 2, 2: 3, 3: 4}, 'national': {1: 3, 2: 4, 3: 5}}
+MATRIX_CONFIG = json.loads((Path(__file__).parent / 'data/mlps_impact_matrix.json').read_text(encoding='utf-8'))
+# Current application policy. Historical source material and confirmed results retain their original matrix.
+MATRIX = {obj: {int(severity): level for severity, level in values.items()} for obj, values in MATRIX_CONFIG['levels'].items()}
 CORE = [f'{dimension}_{obj}_severity' for dimension in ('info', 'service') for obj in MATRIX]
 SUPPORT = ('云计算平台/系统', '通信网络设施')
 PERSON_RANGES = next(q for q in QUESTIONS if q['key'] == 'personal_info_count_system')['count_ranges']
+POPULATION_POLICY = json.loads((Path(__file__).parent / 'data/mlps_population_policy.json').read_text(encoding='utf-8'))
 
 
 def person_bounds(value):
@@ -38,10 +48,6 @@ def personal_info_status(answers):
             return '是'
         return '不确定' if '不确定' in categories else '否'
     return '不确定'
-
-
-def population_floor(number):
-    return 1 if number <= 10000 else 2 if number <= 50000 else 3
 
 
 def visible(q, answers):
@@ -138,7 +144,7 @@ def evaluate(raw, notes=None):
         if isinstance(a.get(key), list) and '其他' in a[key] and not notes.get(key, '').strip():
             issue('OTHER_REQUIRED', key, '请填写其他选项的具体内容。', 'Specify the Other selection.')
     if a.get('security_responsible_entity') == '是' and not notes.get('security_responsible_entity', '').strip():
-        issue('RESPONSIBLE_NAME_REQUIRED', 'security_responsible_entity', '请填写主要负责单位或部门名称。', 'Enter the responsible organization or department name.')
+        issue('RESPONSIBLE_NAME_REQUIRED', 'security_responsible_entity', '请填写主要负责外部单位名称。', 'Enter the responsible external organization name.')
     for key in ('security_responsible_entity',):
         if a.get(key) == '否':
             issue('QA01', key, '已选择“否”：请复核该系统是否适合作为独立定级对象。', 'You selected No: review whether this system is suitable as an independent assessment target.')
@@ -175,10 +181,10 @@ def evaluate(raw, notes=None):
     if type(a.get('sensitive_pi_count')) in (int, float) and count and count[1] is not None and a['sensitive_pi_count'] > count[1]:
         issue('QA03', 'sensitive_pi_count', '敏感个人信息人数超过系统总人数。', 'Sensitive-information count exceeds the system total.')
     if a.get('external_network_access') == '存在公众可访问入口':
-        alerts.append({'code': 'T01', 'zh': '公众入口：触发 Amer Sports 内部最低 2 级；国家标准矩阵等级仍独立计算。', 'en': 'Public ingress triggers the Amer Sports internal level 2 minimum; the national-standard matrix is calculated independently.'})
+        alerts.append({'code': 'T01', 'zh': '公网可访问入口：触发 Amer Sports 内部最低 2 级；影响矩阵等级仍独立计算。', 'en': 'Public internet ingress triggers the Amer Sports internal level 2 minimum; the impact matrix is calculated independently.'})
     for threshold, code in [(1000000, 'T02'), (10000000, 'T03')]:
         if count and count[0] >= threshold:
-            alerts.append({'code': code, 'zh': '个人信息规模触发复核；处理者与系统统计分开，不自动提高等保等级。', 'en': 'Personal information scale triggers review; operator and system counts are separate and do not raise the MLPS grade.'})
+            alerts.append({'code': code, 'zh': '个人信息规模触发复核；处理者与系统统计分开，此规模提示不在人数内部下限之外另加等级。', 'en': 'Personal information scale triggers review; operator and system counts are separate. This scale alert adds no grade above the population minimum.'})
     if '敏感个人信息' in categories:
         alerts.append({'code': 'T05', 'zh': '请核实敏感个人信息的泄露后果。', 'en': 'Review the consequences of sensitive personal information disclosure.'})
     if any(value in categories for value in ('重要数据', '核心数据')) or a.get('data_security_classification') in ('重要', '核心', '混合') or a.get('cii_status') == '正式认定':
@@ -215,16 +221,16 @@ def evaluate(raw, notes=None):
         issue('BUSINESS_MIN_UNKNOWN' if importance == '不确定' else 'BUSINESS_MIN_REVIEW', 'critical_business', '请按当前选项确认业务重要性，才能确定内部等级下限。', 'Confirm business importance using the current options before establishing the internal minimum.')
     if personal_info_status(a) == '是':
         if count:
-            population_minimum = population_floor(count[0])
-            organization_trace.append({'code': 'AMER-POPULATION-MIN', 'field': 'personal_info_count_system', 'answer': a['personal_info_count_system'], 'level': population_minimum,
-                                       'zh': '个人信息人数触发 Amer Sports 内部等级下限；历史范围使用可确定的等级下限。', 'en': 'Personal-information population establishes an Amer Sports internal minimum; historical bands use the known lower bound.'})
-            upper_floor = population_floor(count[1]) if count[1] is not None else 3
-            if upper_floor != population_minimum:
-                issue('POPULATION_MIN_REVIEW', 'personal_info_count_system', '历史人数范围跨越当前等级档位，请重新选择三档人数范围。', 'The historical population range crosses current grade bands; choose one of the three current ranges.')
+            population_floor = max(band['level'] for band in POPULATION_POLICY['bands'] if count[0] >= band['lower'])
+            organization_trace.append({'code': 'AMER-POPULATION-MIN', 'field': 'personal_info_count_system', 'answer': a['personal_info_count_system'], 'level': population_floor,
+                                       'zh': f'个人信息人数触发 Amer Sports 内部最低 {population_floor} 级；与影响矩阵及其他内部下限取最高值。',
+                                       'en': f'Personal-information population establishes an Amer Sports internal level {population_floor} minimum; retain any higher impact or internal grade.'})
+            if any(count[0] < band['lower'] and (count[1] is None or count[1] >= band['lower']) for band in POPULATION_POLICY['bands'][1:]):
+                issue('POPULATION_RANGE_REVIEW', 'personal_info_count_system', '历史人数范围跨越当前内部等级边界，请核实并重新选择人数范围；当前仅显示已知下限。', 'The historical range spans an internal grade boundary; verify and reselect the population band. Only the known lower bound is shown.')
         elif a.get('personal_info_count_system') == '不确定':
-            issue('POPULATION_MIN_UNKNOWN', 'personal_info_count_system', '请核实个人信息人数范围，才能确认内部等级下限。', 'Verify the personal-information population range before confirming the internal minimum.')
+            issue('POPULATION_UNKNOWN', 'personal_info_count_system', '请核实个人信息人数范围，才能确认内部等级下限。', 'Verify the personal-information population range before confirming the internal grade minimum.')
     elif personal_info_status(a) == '不确定' and a.get('data_categories'):
-        issue('PERSONAL_SCOPE_MIN_UNKNOWN', 'data_categories', '请核实是否涉及个人信息，以确定人数规则是否适用。', 'Verify personal-information applicability before applying the population rule.')
+        issue('PERSONAL_SCOPE_UNKNOWN', 'data_categories', '请核实是否涉及个人信息，以确定人数统计是否适用。', 'Verify personal-information applicability before collecting the population.')
     data_class = a.get('data_security_classification')
     data_floor = {'一般': 1, '重要': 3, '核心': 3, '混合': 3}.get(data_class)
     if data_floor:
@@ -256,11 +262,13 @@ def evaluate(raw, notes=None):
     status = 'insufficient_impact_data' if not base else 'pending_review' if issues else 'preliminary_complete'
     return {'status': status, 'business_information_level': dimensions[0], 'system_service_level': dimensions[1],
             'base_level': base, 'special_principle_minimum': minimum, 'proposed_level': proposed,
-            'organization_minimum': organization_minimum, 'organization_rule_trace': organization_trace, 'organization_rule_version': 'AMER-INTERNAL/5',
-            'known_lower_bound_level': proposed, 'is_lower_bound_only': bool(unknown) or base is None or any(i['code'] in ('LINK_GRADE_UNKNOWN', 'NETWORK_MIN_UNKNOWN', 'SERVICE_MIN_UNKNOWN', 'TRANSACTION_MIN_UNKNOWN', 'BUSINESS_MIN_UNKNOWN', 'BUSINESS_MIN_REVIEW', 'POPULATION_MIN_UNKNOWN', 'POPULATION_MIN_REVIEW', 'PERSONAL_SCOPE_MIN_UNKNOWN', 'DATA_CLASS_MIN_UNKNOWN', 'CROSS_BORDER_MIN_UNKNOWN', 'RECORDS_MIN_UNKNOWN', 'STORAGE_MIN_UNKNOWN', 'DEPENDENCY_MIN_UNKNOWN', 'SAFETY_MIN_UNKNOWN') or i['code'] == 'REQUIRED' and i['field'] in ('interconnected_system_level', 'public_service_nature', 'involves_transactions', 'critical_business', 'personal_info_count_system', 'data_security_classification', 'cross_border_data', 'data_volume_ranges', 'external_dependency_impact', 'safety_impact') for i in issues), 'blocking_unknown_fields': unknown,
+            'organization_minimum': organization_minimum, 'organization_rule_trace': organization_trace, 'organization_rule_version': 'AMER-INTERNAL/7',
+            'known_lower_bound_level': proposed, 'is_lower_bound_only': bool(unknown) or base is None or any(i['code'] in ('LINK_GRADE_UNKNOWN', 'NETWORK_MIN_UNKNOWN', 'SERVICE_MIN_UNKNOWN', 'TRANSACTION_MIN_UNKNOWN', 'BUSINESS_MIN_UNKNOWN', 'BUSINESS_MIN_REVIEW', 'POPULATION_UNKNOWN', 'POPULATION_RANGE_REVIEW', 'PERSONAL_SCOPE_UNKNOWN', 'DATA_CLASS_MIN_UNKNOWN', 'CROSS_BORDER_MIN_UNKNOWN', 'RECORDS_MIN_UNKNOWN', 'STORAGE_MIN_UNKNOWN', 'DEPENDENCY_MIN_UNKNOWN', 'SAFETY_MIN_UNKNOWN') or i['code'] == 'REQUIRED' and i['field'] in ('interconnected_system_level', 'public_service_nature', 'involves_transactions', 'critical_business', 'personal_info_count_system', 'data_security_classification', 'cross_border_data', 'data_volume_ranges', 'external_dependency_impact', 'safety_impact') for i in issues), 'blocking_unknown_fields': unknown,
             'issues': issues, 'alerts': alerts, 'rule_trace': trace, 'final_confirmed_level': None,
             'manual_review_required': bool(issues) or bool(proposed and proposed >= 2),
-            'standard_version': 'GB/T 22240-2020', 'questionnaire_version': 'AmerSports-2.18', 'rule_engine_version': '1.8.2',
+            'standard_version': 'GB/T 22240-2020', 'questionnaire_version': 'AmerSports-2.21', 'rule_engine_version': '1.11.0',
+            'matrix_rule_version': MATRIX_CONFIG['version'],
+            'population_rule_version': POPULATION_POLICY['version'],
             'sector_rules_status': 'not_collected', 'verified_sector_minimum': None}
 
 

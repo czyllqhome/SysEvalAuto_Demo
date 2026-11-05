@@ -1,3 +1,13 @@
+> 2026-11-06：信息收集“一键 Demo”更新为当前评估保存版本 9 的 30 题答案、补充说明及部门联系人，包含可独立复制的网络拓扑图。定级 Demo 保留，旧模板已备份。Information Demo snapshot: [docs/mlps-intake.md](docs/mlps-intake.md).
+>
+> 2026-11-06：定级结果的内部规则卡片用完整问卷选项替换 1–5 级刻度条，高亮已选项，保留历史答案与计算结果。Read-only answer comparison: [docs/mlps-intake.md](docs/mlps-intake.md).
+>
+> 2026-11-06：定级页将 G01–G06、G09–G12 集中前移，宽屏两列、手机单列，原题号与规则保留。当前评估的定级答案和理由已固定为本页 Demo，旧模板已备份，其他信息章节示例保留。Grading layout and scoped Demo: [docs/mlps-intake.md](docs/mlps-intake.md).
+>
+> 2026-11-06：当前 AmerSports-2.21 / 引擎 1.11.0：个人信息人数采用企业内部最低等级：0–9,999 人为 1 级、10,000–99,999 人为 2 级、100,000 人及以上为 3 级，保留不确定；与影响矩阵和其他内部下限取最高值。“分级方法”同步使用同一规则配置。历史答案、已确认结果及基线保留。Current questionnaire policy: [docs/mlps-intake.md](docs/mlps-intake.md).
+>
+> 2026-11-06：分级应用矩阵 AMER-MATRIX/1 将合法权益特别严重损害改为 3 级（AmerSports-2.19 / 引擎 1.9.0）；新计算生效，历史确认及基线保留。分级说明简化，RBAC 归入规则，审计单独分组。说明 / Current application grading policy: [docs/mlps-intake.md](docs/mlps-intake.md).
+>
 > 2026-11-05：统一全站字体、字号、控件与自适应内容宽度，减少宽屏留白。说明 / Unified interface: [docs/interface-design.md](docs/interface-design.md).
 
 > 2026-11-05：新增管理员管理工作台。admin 登录默认进入 `/dashboard`，原台账位于 `/assessments`；当前组织评估、供应商协同、整改、待办、系统等级及部门分布均使用真实记录。中英文切换保留原文，无迁移或数据重置。见 [工作台说明](docs/admin-dashboard.md)。

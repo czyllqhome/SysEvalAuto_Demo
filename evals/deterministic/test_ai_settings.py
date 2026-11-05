@@ -45,6 +45,7 @@ def test_settings_isolation_revision_and_secret_boundary(owner, monkeypatch):
             db.add(AccountPolicy(user_id=user.id, admin=False))
     assert client.get(PATH).status_code == 403
     assert client.put(PATH, json=data).status_code == 403
+    assert client.get('/api/v1/admin/ai-prompts').status_code == 403
 
 
 @pytest.mark.parametrize('change', [
@@ -91,3 +92,49 @@ def test_queued_job_uses_pinned_configuration_and_real_transport(owner, monkeypa
     assert len(job['usage']['ai_config_hash']) == 64
     assert job['usage']['tokens'] == 12
     assert active_config.get() is None
+
+
+def test_prompt_catalog_matches_current_intake_and_preserves_legacy_settings(owner):
+    from app.ai_settings import defaults
+    from app.mlps_intake import QUESTIONS
+    _, client = owner
+    before = body(client)
+    response = client.get('/api/v1/admin/ai-prompts')
+    assert response.status_code == 200
+    items = response.json()['items']
+    current = {item['key'] for item in items if item['status'] == 'active'}
+    system = {item['key']: item for item in items if item['status'] == 'system'}
+    legacy = {item['key'] for item in items if item['status'] == 'legacy'}
+    topics = {f"narrative_refinement:{q['ai_topic']}" for q in QUESTIONS if q.get('ai_topic')}
+    assert current == {'prd_generation', 'impact_analysis'} | topics
+    assert len(current) == 5 and len(legacy) == 12
+    assert current | legacy == set(defaults()['prompts'])
+    assert set(system) == {'requirement_risk', 'delivery_evidence'}
+    assert len({item['key'] for item in items}) == len(items)
+    assert 'control_items and supplier_response' in system['requirement_risk']['instruction']
+    assert 'EVERY acceptance criterion' in system['delivery_evidence']['instruction']
+    assert all(item['title']['zh'] and item['title']['en'] and item['usage']['zh'] and item['usage']['en'] for item in items)
+    assert body(client) == before  # Reading applicability must not write runtime settings.
+    before['prompts']['context_organization'] = '历史自定义模板，保持原文'
+    assert client.put(PATH, json=before).status_code == 200
+    saved = body(client)
+    saved['prompts']['prd_generation'] = 'Current PRD instruction {language}'
+    assert client.put(PATH, json=saved).status_code == 200
+    assert body(client)['prompts']['context_organization'] == '历史自定义模板，保持原文'
+
+
+@pytest.mark.parametrize('kind', ['prd_generation', 'impact_analysis', 'delivery_evidence'])
+def test_current_default_prompts_do_not_mix_unrelated_task_contracts(kind):
+    from app.ai import default_instruction
+    instruction = default_instruction(kind, 'en')
+    assert 'untrusted business evidence' in instruction
+    assert 'grading_facts' not in instruction and 'source_blocks' not in instruction
+    if kind == 'prd_generation':
+        assert 'EVERY assigned REQ key' in instruction
+        assert 'finding for EVERY requirement' not in instruction
+    elif kind == 'impact_analysis':
+        assert 'finding for EVERY requirement' in instruction
+        assert 'requirement_slots' not in instruction
+    else:
+        assert 'requirement_slots' not in instruction
+        assert 'finding for EVERY requirement' not in instruction

@@ -1,5 +1,5 @@
 import { selectedImpactFields } from './impactSelection'
-import { ArrowLeft, ArrowRight, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, ShieldCheck } from 'lucide-react'
 import { Button, Notice } from './components'
 import { useLocale } from './i18n'
 import type { Assessment, Question } from './MLPSIntake'
@@ -37,8 +37,15 @@ export default function MLPSGradeResult({ assessment: a, answers, notes, questio
     const q = questions.find(q => q.key === field)
     const group = subfield ? q?.range_groups?.[subfield] : undefined
     if (group) { const index = group.values.indexOf(answer); if (index >= 0) return locale === 'zh' ? group.zh[index] : group.en[index] }
-    const index = q?.options.indexOf(answer) ?? -1
-    return locale === 'en' && index >= 0 ? q!.options_en[index] : answer
+    const index = q?.options?.indexOf(answer) ?? -1
+    return index >= 0 ? locale === 'en' ? q!.options_en?.[index] ?? answer : q!.options_zh?.[index] ?? answer : answer
+  }
+  const internalOptions = (field: string, answer: string | number, subfield?: string) => {
+    const q = questions.find(q => q.key === field)
+    const group = subfield ? q?.range_groups?.[subfield] : undefined
+    const options: { value: string | number; label: string; saved: boolean }[] = (group?.values ?? q?.options ?? []).map(value => ({ value, label: internalAnswer(field, value, subfield), saved: false }))
+    if (!options.some(option => option.value === answer)) options.unshift({ value: answer, label: internalAnswer(field, answer, subfield), saved: true })
+    return options
   }
   const tooLow = frameworks.some(f => Number(f.slice(-1)) < (a.proposed_level ?? 0))
   return <div className="mlps-grade-results" aria-live="polite">
@@ -51,8 +58,10 @@ export default function MLPSGradeResult({ assessment: a, answers, notes, questio
         <header><span>{title}</span>{highest && <b>{t('决定内部下限', 'Internal minimum driver')}</b>}</header>
         <h4>{questionText(row.field, row.subfield)}</h4>
         <div className="grade-score-reading"><span className="grade-score-answer"><small>{t('已选答案', 'Selected answer')}</small><b>{internalAnswer(row.field, row.answer, row.subfield)}</b></span><span className="grade-score-level"><small>{t('内部最低等级', 'Internal minimum grade')}</small><strong>{level(row.level)}</strong></span></div>
-        <input type="range" min={1} max={5} step={1} value={row.level} disabled aria-label={title} aria-valuetext={level(row.level)} style={{ background: `linear-gradient(to right, ${highest ? '#2563eb' : '#7189ac'} ${(row.level - 1) / 4 * 100}%, #dce5f2 ${(row.level - 1) / 4 * 100}%)` }} />
-        <div className="grade-score-ticks">{[1, 2, 3, 4, 5].map(value => <span key={value}>{level(value)}</span>)}</div>
+        <ul className="grade-answer-options" aria-label={`${internalTitle(row.field, row.subfield)} · ${t('全部选项', 'All options')}`}>{internalOptions(row.field, row.answer, row.subfield).map(option => <li key={`${typeof option.value}:${option.value}`} aria-current={option.value === row.answer ? 'true' : undefined}>
+          <span>{option.label}{option.saved && <small className="grade-option-history">{t('已保存答案', 'Saved answer')}</small>}</span>
+          {option.value === row.answer && <span className="grade-option-selected"><Check size={14} aria-hidden="true" />{t('已选', 'Selected')}</span>}
+        </li>)}</ul>
         <p>{locale === 'zh' ? row.zh : row.en}</p>
         {!readOnly && <Button variant="text" disabled={locked} onClick={() => back(row.field)}>{t('查看或修改答案', 'View or edit answer')}<ArrowRight size={14} /></Button>}
       </article>

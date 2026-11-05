@@ -6,14 +6,14 @@ import { useLocale } from './i18n'
 
 type Template = { filename: string; content: string }
 type State = { version: number; template: Template | null; slots: string[] }
-export default function PrdTemplateEditor() {
+export default function PrdTemplateEditor({ onSaved }: { onSaved?: () => void | Promise<void> } = {}) {
   const { t } = useLocale()
   const query = useQuery({ queryKey: ['prd-template'], queryFn: () => api<State>('/admin/prd-template') })
   return <section className="paper-panel"><h2>{t('PRD 文档模板（Markdown）', 'PRD document template (Markdown)')}</h2>
     {query.error && <Notice error>{t('模板读取失败，请刷新重试。', 'Could not load the template. Refresh to retry.')}</Notice>}
-    {query.data && <Editor initial={query.data} />}</section>
+    {query.data && <Editor initial={query.data} onSaved={onSaved} />}</section>
 }
-function Editor({ initial }: { initial: State }) {
+function Editor({ initial, onSaved }: { initial: State; onSaved?: () => void | Promise<void> }) {
   const { t, error: translate } = useLocale()
   const [data, setData] = useState(initial), [busy, setBusy] = useState(false), [message, setMessage] = useState('')
   const [problem, setProblem] = useState('')
@@ -32,6 +32,7 @@ function Editor({ initial }: { initial: State }) {
       const result = await api<State>('/admin/prd-template', { method: 'PUT', body: { version: data.version, template } })
       setData(result)
       setMessage(t('已保存。新建 PRD 任务生效；已有文档和排队任务保持原模板。', 'Saved. New PRD jobs use this change; existing documents and queued jobs retain their template.'))
+      await onSaved?.()
     } catch (e) { setProblem(e instanceof ApiError ? translate(e.code) : translate('NETWORK_ERROR')) }
     finally { setBusy(false) }
   }
