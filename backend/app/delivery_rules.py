@@ -1,5 +1,5 @@
 """Pure validation for immutable evidence manifests and human decisions."""
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from .domain import DomainError
 
@@ -11,11 +11,11 @@ def text(body, key, maximum=8000):
     return value.strip()
 
 
-def metadata(body):
+def metadata(body, today=None):
     result = {k: text(body, k, 200 if k != 'description' else 8000)
               for k in ('environment', 'system_version', 'collected_on', 'description')}
     try:
-        if date.fromisoformat(result['collected_on']) > datetime.now(timezone.utc).date():
+        if date.fromisoformat(result['collected_on']) > (today or datetime.now(timezone(timedelta(hours=8))).date()):
             raise ValueError()
     except ValueError as exc:
         raise DomainError('INVALID_FIELDS', 422, {'field': 'collected_on'}) from exc

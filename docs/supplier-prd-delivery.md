@@ -1,9 +1,51 @@
+> 2026-11-06：负责人已下发的逐项整改，在本轮全部确认可完成后自动冻结完整承诺并进入双方确认；客户与供应商仍须独立确认相同 hash。旧复核/供应商链接自动转向已有待确认基线。Scoped remediation completion automatically prepares and opens joint confirmation; independent same-hash signatures remain required.
+
+## 2026-11-06：已确认开发的条目直接计入承诺（当前契约）
+
+桌面汇总的两个风险卡片与左侧两行答复状态块共用网格内容行，上下边缘对齐；窄屏继续自动换行。Desktop risk cards align with the two-row response grid.
+
+供应商本轮不可变提交中 `implementation_status=yes` 的条目直接计入开发承诺。负责人只处理部分完成、无法完成和待澄清等例外；页面移除“一键接受可实施项”和共同理由批量接受入口，已确认条目显示“供应商已确认开发”，保留历史人工理由供查阅。待负责人审查的计数及保存完整性仅检查需人工决定的条目，筛选隐藏的例外仍须处理。
+
+客户保存审查时可以只提交例外的 finding 决定；服务端从当前不可变 Submission 补齐可完成承诺，并记录 `decision_source=supplier_commitment`。它不记录为负责人接受风险，不降低来源/报告严重度，不生成 `owner_reviewed` 或残余中风险标记；已有明确人工决定和理由、整改轮次锁定决定保持原样。旧客户端仍可提交全量人工决定。伪造来源标记、修改可变草稿或省略例外不能绕过逐项责任与来源 High 门槛。
+
+若全部条目已确认可完成且无待处理例外，客户可直接冻结基线并收集双方确认，无需额外点击接受或保存空审查。冻结事务完成承诺记录及完整性检查；供应商提交本身不冻结或替任一方签署。存在例外时仍先保存决定，打回项进入后续整改轮次。双方独立确认同一 hash 后才转为待开发。旧基线、来源原文及不可变提交不重写，无数据库迁移或数据重置。
+
+确认汇总使用“可完成、部分完成、无法完成、待澄清”四个带标签、数量和状态色点的统计块，替代斜杠数字；点击清除旧搜索并查看相应状态。宽屏两列统计、小屏换行，中英文切换保留原始答复及未保存的审查输入。
+
+English: Submitted Yes responses are included directly as supplier commitments. Owners decide only exceptions; no repeated acceptance or bulk rationale is required for confirmed delivery. The server derives commitment dispositions from the current immutable submission and distinguishes them from owner risk acceptance. All-confirmed rounds can freeze directly for independent joint confirmation. Historical authored decisions, scoped remediation, source/version/organization checks, delivery acceptance and same-hash signatures remain in force. Four labeled, clickable response statistics replace the slash-separated count.
+
+Offline regressions cover exception-only saving, forged provenance, mutable-draft isolation, legacy authored decisions, direct all-confirmed freezing, independent confirmation, remediation carry-forward, bilingual filtering and pending-count completeness.
+
+## 2026-11-06：直接进入本地规则负责人审查
+
+本节取代下文“提交后由负责人选择是否启动本地/AI 审查”的入口流程。供应商提交在保存不可变答复的同一事务中同步生成本地规则报告，直接返回 `RESULT_REVIEW`、提交 ID 和未审查报告。没有模型任务、模型用量或等待队列；不依赖 OpenRouter 配置与模型预算，旧客户端传入 `mode=openrouter` 也采用本地规则准备。
+
+负责人打开复核页即可在默认“需关注”列表逐项接受或打回，记录理由与责任安排。移除“按需开始后续审查”及本地/AI 两个启动按钮。已确认可完成项直接计入开发承诺，来源高风险的例外继续要求逐项决定；报告生成不代替例外审查及双方确认。单项 AI 辅助和完整 AI 重评仍仅在用户主动请求时运行。
+
+对于已提交但缺少报告的旧记录，具备 review/manage 权限的客户页面自动调用 `POST /systems/{id}/local-review`，提交 `version`、`round_id`、`submission_id` 和界面语言。接口验证当前轮次、不可变提交、组织和审查权限，沿用幂等及版本冲突保护；同一提交已有报告时复用，不覆盖原报告或决定。供应商和只读客户不调用此准备动作。准备失败显示原因并仅提供本地重试，不回到方式选择。
+
+本地准备与异步审查共用报告校验和发布方法。报告只使用当前轮次固定 PRD/来源及不可变提交；整改轮次只分析本轮条目，再合并此前已接受的结论和决定。准备审计保存报告/提交 ID、本地模式与来源 hash，保留审查员权限，不记为需求编辑贡献。历史提交、报告、基线和独立双方同 hash 确认保留，无数据库迁移或重置。
+
+English: Supplier submission synchronously prepares rule-based review in the same transaction, without model work or budget dependency. Owners directly review items needing attention. Authorized customer pages automatically prepare missing legacy reports through a versioned, submission-bound command; suppliers and read-only users cannot do so. Findings remain advisory, High exceptions still need individual owner decisions, and independent baseline confirmations remain mandatory. Explicit AI assistance remains optional.
+
+离线回归覆盖配置/预算独立、原文和来源保留、旧记录准备、幂等、过期版本/提交、组织和只读限制、审查员权限、事务回滚、逐项整改承接及页面直接展示。
+
+## 2026-11-06：供应商高风险 Demo 采用最新答复
+
+本页“一键填入 Demo”的三个高风险例外已按用户最新提交的第 1 轮答复（轮次版本 13）更新：远程管理鉴别信息保护仍为无法完成，预计工作日保留为空；恶意代码防范与外部人员接入仍为需要澄清，分别保留 5、3 个工作日。中文原因与补偿措施采用用户原文，不再补回已删除的演示前缀。交付负责人、实现方案及空日期保持原样，包括远程管理方案中原有的“20 个工作日”评估说明，不据此擅自填入预计天数。
+
+`supplierDemo.ts` 继续按控制条款内容匹配，不使用 REQ 编号；其他条目保留可完成 Demo 策略。英文示例同步表达相同内容与空值设置，切换语言不改写已填答复。填入仍为可撤销的草稿操作，沿用原自动/显式保存，不自动提交、调用 AI 或替负责人接受风险。既有不可变提交、控制来源与双方基线保持不变。
+
+旧 Demo 文件备份及来源轮次、提交 ID、内容 hash 留在本地 `.syseval/`；离线 fixture 仅包含三个获授权的示例条款和答复，不携带组织、账号或运行记录 ID。前端回归逐字段核对中文快照，验证英文状态/工期、条款换行兼容、填入保存和撤销恢复原文。
+
+English: Supplier Demo now reuses the three latest user-authored High-risk exceptions. Remote management retains a blank workday estimate; the clarification examples retain 5 and 3 days. Authored explanations, compensating measures and delivery plans are preserved. Clause matching, bilingual defaults, reversible draft filling, explicit submission, immutable history and independent owner review remain unchanged.
+
 ## 2026-11-05：逐项整改闭环（当前契约） / Scoped remediation workflow
 
 本节取代下文历史记录中“保存后手动开启全量轮次”“来源 High 的 no/partial 只能经 AI 后接受”及“双方确认后手动转为待开发”的说明。
 
 1. 负责人在同一复核表逐项选择接受或打回，填写理由与责任安排。高风险例外（no、partial、needs_clarification）须逐项确认，批量动作跳过；AI 仅提供建议，不代表负责人接受。
-2. 点击“保存审查决定”同时提交当前 report_id 和 advance_workflow=true。授权负责人有 manage 权限时，在同一版本校验事务内保存决定：存在打回项则自动创建新轮次并下发；全部接受则自动冻结基线。仅有 review 权限的审查员仍可保存，推进操作由负责人执行。旧客户端省略该字段时保留先保存再推进的兼容接口。
+2. 点击“保存并下发至供应商”同时提交当前 report_id 和 advance_workflow=true。授权负责人有 manage 权限时，在同一版本校验事务内保存决定：存在打回项则自动创建新轮次并下发；全部接受则自动冻结基线。仅有 review 权限的审查员仍可保存，推进操作由负责人执行。旧客户端省略该字段时保留先保存再推进的兼容接口。
 3. 新轮次的 review_scope 只包含被打回的需求；每项 owner_feedback 保留负责人原文。已接受项保留不可变答复、报告结论、决定及其 round/submission/report 来源。供应商只填写整改项，API 和 CSV 都禁止改写已接受项；提交时服务端合并完整承诺。只改变某需求的一条结论时，该需求所有结论都须随新答复重新审查。
 4. 提交仍不调用 AI 或自动排队分析。负责人显式开始本地规则审查或 AI 审查，任务只分析本轮整改项，并合并此前已接受的结论及决定。负责人可继续打回，重复此闭环；已接受项不再次分配给供应商。
 5. 对来源 High 的例外或报告 high/critical 风险，负责人明确接受后，决定记录 residual_severity=medium。表格与最终稿显示“接受后：中风险”。来源控制、原报告严重度和供应商答复仍保留原值；不能把风险接受当作已实现或已验收。

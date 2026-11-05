@@ -57,7 +57,7 @@ it('explains why accepted findings still need rationale, including hidden findin
   render(<QueryClientProvider client={new QueryClient()}><LocaleProvider><AuthContext.Provider value={{
     user: { id: 'm', name: 'Manager', email: 'm@test', role: 'member', org_id: 'org' }, csrf: '', model_configured: false,
   }}><Preferences><MemoryRouter><ImpactPanel detail={detail} /></MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
-  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '保存并下发至供应商' })).toBeDisabled()
   expect(screen.getByRole('status')).toHaveTextContent('还有 1 项未填写理由与责任安排')
   fireEvent.change(screen.getByLabelText('筛选严重度'), { target: { value: 'high' } })
   expect(screen.getByRole('status')).toHaveTextContent('还有 1 项未填写理由与责任安排')
@@ -65,11 +65,11 @@ it('explains why accepted findings still need rationale, including hidden findin
   fireEvent.click(screen.getByRole('button', { name: /点击查看与审查/ }))
   expect(screen.getByRole('dialog')).toBeInTheDocument()
   fireEvent.change(screen.getByLabelText('理由与责任安排'), { target: { value: 'Owner will verify evidence before release' } })
-  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: '保存并下发至供应商' })).toBeEnabled()
   expect(screen.queryByRole('status')).not.toBeInTheDocument()
 })
 
-it('bulk accepts submitted yes responses', () => {
+it('includes supplier commitments without another owner acceptance and allows joint confirmation', () => {
   const detail: SystemDetail = {
     system: { id: 's', name: 'Test', status: 'RESULT_REVIEW', version: 1, revision: 1,
       context: {}, draft: {}, classification: {}, created_at: 0, updated_at: 0 },
@@ -82,12 +82,13 @@ it('bulk accepts submitted yes responses', () => {
   render(<QueryClientProvider client={new QueryClient()}><LocaleProvider><AuthContext.Provider value={{
     user: { id: 'm', name: 'Manager', email: 'm@test', role: 'member', org_id: 'org' }, csrf: '', model_configured: false,
   }}><Preferences><MemoryRouter><ImpactPanel detail={detail} /></MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
-  fireEvent.click(screen.getByRole('button', { name: /一键接受可实施项/ }))
-  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeEnabled()
-  expect(screen.getByRole('button', { name: /一键接受可实施项/ })).toBeDisabled()
+  expect(screen.queryByRole('button', { name: /一键接受可实施项/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '保存并下发至供应商' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '冻结方案并收集双方确认' })).toBeEnabled()
   fireEvent.click(screen.getByRole('button', { name: /点击查看与审查/ }))
-  expect(screen.getByLabelText('客户决定')).toHaveValue('accept')
-  expect((screen.getByLabelText('理由与责任安排') as HTMLTextAreaElement).value).toContain('接受供应商可实施承诺')
+  expect(screen.getByText('供应商已确认开发')).toBeVisible()
+  expect(screen.queryByLabelText('客户决定')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('理由与责任安排')).not.toBeInTheDocument()
 })
 
 it('requires explicit owner acceptance before freezing a source High gap', () => {
@@ -129,23 +130,21 @@ it('expands source High clarification, includes it in high-risk filters and requ
   expect(screen.getByText('Clarify the hosting responsibility').closest('article')).toHaveClass('risk-tone-high', 'expanded-risk-card')
   expect(screen.getByRole('option', { name: '接受并承担已记录残余风险' })).toBeEnabled()
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  fireEvent.change(screen.getByLabelText('批量审查理由'), { target: { value: 'Shared rationale' } })
-  fireEvent.click(screen.getByRole('button', { name: '接受未处理项并记录理由' }))
+  expect(screen.queryByLabelText('批量审查理由')).not.toBeInTheDocument()
   expect(screen.getByLabelText('负责人决定')).toHaveValue('')
   expect(screen.getByLabelText('理由与责任安排')).toHaveValue('')
-  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '保存并下发至供应商' })).toBeDisabled()
   fireEvent.change(screen.getByLabelText('筛选严重度'), { target: { value: 'major' } })
   expect(screen.getByLabelText('负责人决定')).toBeVisible()
   expect(screen.queryByText('Evidence pending')).not.toBeInTheDocument()
   fireEvent.change(screen.getByLabelText('负责人决定'), { target: { value: 'accept' } })
-  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '保存并下发至供应商' })).toBeDisabled()
   fireEvent.change(screen.getByLabelText('理由与责任安排'), { target: { value: '安全负责人承担宿主机防护责任，发布前补充验收证据。' } })
-  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: '保存并下发至供应商' })).toBeEnabled()
   expect(screen.getByRole('button', { name: '冻结方案并收集双方确认' })).toBeDisabled()
-  fireEvent.click(screen.getByRole('button', { name: '保存审查决定' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存并下发至供应商' }))
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
   expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ version: 4, decisions: {
     'F-C': { decision: 'accept', owner_reviewed: true, reason: '安全负责人承担宿主机防护责任，发布前补充验收证据。' },
-    'F-Y': { decision: 'accept', reason: 'Shared rationale' },
   } })
 })

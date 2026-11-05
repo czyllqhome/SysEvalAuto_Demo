@@ -30,7 +30,7 @@ export interface Answer {
   estimated_start_date?: string | null; estimated_finish_date?: string | null;
 }
 export interface Finding { contextual_assessment?: { exposure: string; exploitation_conditions: string; mitigations: string; uncertainties: string[]; facts: { path: string; quote: string }[] } | null; id: string; requirement_id: string; severity: string; title: string; evidence_field: string; evidence: string; impact: string; recommendation: string }
-export interface Decision { decision: 'accept' | 'changes' | ''; reason: string; owner_reviewed?: boolean; residual_severity?: string }
+export interface Decision { decision: 'accept' | 'changes' | ''; reason: string; owner_reviewed?: boolean; residual_severity?: string; decision_source?: 'supplier_commitment' }
 export type SourceRisk = 'high' | 'medium' | 'low' | 'unknown'
 export interface SupplierReviewItem {
   requirement_id: string; title: string; description: string; origin: Requirement['origin']; domains: string[];

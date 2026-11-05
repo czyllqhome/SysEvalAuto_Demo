@@ -43,6 +43,7 @@ export default function Workspace() {
   if (!vendor && tab === 'brief') return <Navigate to={`/systems/${id}/${system.context_revision_id ? 'controls' : 'information'}`} replace />
   if (!vendor && tab === 'discovery') return <Navigate to={`/systems/${id}/${system.classification.effective_level ? 'information' : 'classification'}`} replace />
   if (vendor && tab === 'prd') return <Navigate to={`/systems/${id}/supplier`} replace />
+  if (system.status === 'FINAL_CONFIRMATION' && detail.baseline && ['supplier', 'impact'].includes(tab ?? '')) return <Navigate to={`/systems/${id}/agreement`} replace />
   const selectedTab = tab ?? stageTab(system.status, vendor, hasDescription)
   const active = selectedTab === 'brief' ? 'information' : selectedTab
   const steps = [
@@ -73,6 +74,7 @@ export default function Workspace() {
     'control.applicability_completed': t('补充适用条件并更新控制匹配', 'Applicability answers and controls updated'),
     'control.applicability_answers': t('记录适用条件答案', 'Applicability answers recorded'),
     'control.domains_excluded': t('按控制域批量移除控制', 'Controls removed by domain'),
+    'control.exclusion_withdrawn': t('撤回控制人工排除', 'Manual control exclusion withdrawn'),
     'control.selection_changed': t('调整控制范围', 'Control scope changed'), 'job.queued': t('任务已排队', 'Task queued'),
     'context_organization.completed': t('完成应用梳理', 'Discovery organized'), 'prd_generation.completed': t('生成 PRD', 'PRD generated'),
     'impact_analysis.completed': t('完成影响分析', 'Impact analysis completed'), 'impact_analysis.requested': t('发起后续影响审查', 'Requested further impact review'), 'prd.approved': t('确认 PRD', 'PRD approved'),

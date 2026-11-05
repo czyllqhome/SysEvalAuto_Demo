@@ -85,6 +85,7 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
     previousStep.current = step
     sectionHeading.current?.scrollIntoView?.({ block: 'start', behavior: 'auto' })
   }, [step])
+  const [impactInputRevision, setImpactInputRevision] = useState(0)
   const [demoUndo, setDemoUndo] = useState<{ keys: string[]; answers: Answers; notes: Record<string, string>; contacts: Record<string, DepartmentContact>; frameworks: string[] } | null>(null)
   const [result, setResult] = useState<Result | null>(null), [waiting, setWaiting] = useState(false), [problem, setProblem] = useState('')
   const sequence = useRef(0)
@@ -115,7 +116,13 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
     return position < 0 ? q : { ...q, id: `${section}${String(position + 1).padStart(2, '0')}` }
   }
   const current = visible.filter(q => inStep(q, step))
-  const compactGrading = step === 0 ? current.filter(q => compactGradingKeys.has(q.key)) : []
+  const questionGroups: Question[][] = []
+  for (const question of current) {
+    const compact = step === 0 && compactGradingKeys.has(question.key)
+    const previous = questionGroups.at(-1)
+    if (compact && previous && compactGradingKeys.has(previous[0].key)) previous.push(question)
+    else questionGroups.push([question])
+  }
   const change = () => { sequence.current++; setDirty(true); setResult(null); setEarlyResult(false); setProblem('') }
   const update = (key: string, value: Value) => { setAnswers(a => ({ ...a, [key]: value })); change() }
   useEffect(() => {
@@ -186,7 +193,7 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
   }
   const field = (original: Question): ReactNode => {
     const q = displayQuestion(original)
-    if (q.kind === 'severity') return <ImpactDimension key={q.key} code={q.id} dimension={q.key.startsWith('info_') ? 'info' : 'service'} answers={answers} notes={notes} update={(patch, rationale) => { setAnswers(old => { const next = { ...old }; for (const [key, value] of Object.entries(patch)) { if (value === undefined) delete next[key]; else next[key] = value }; return next }); if (rationale) setNotes(old => ({ ...old, ...rationale })); change() }} />
+    if (q.kind === 'severity') return <ImpactDimension key={`${q.key}-${impactInputRevision}`} code={q.id} dimension={q.key.startsWith('info_') ? 'info' : 'service'} answers={answers} notes={notes} update={(patch, rationale) => { setAnswers(old => { const next = { ...old }; for (const [key, value] of Object.entries(patch)) { if (value === undefined) delete next[key]; else next[key] = value }; return next }); if (rationale) setNotes(old => ({ ...old, ...rationale })); change() }} />
     const v = answers[q.key], title = locale === 'zh' ? q.zh : q.en
     const hint = q.kind === 'severity' ? t('0 为无侵害，9 为无法判断；1–3 是损害程度，不是等保等级。每项均需判断理由。', q.hint_en) : q.kind === 'enum' || q.kind === 'multi' ? t('按实际情况选择；尚未核实的信息请选择不确定。', q.hint_en) : (locale === 'zh' ? q.hint.replace(/^(long_text|text|integer|decimal|number|file\/链接)[，：； ]*/, '').replace(/boolean_3[； ]*/, '') : q.hint_en)
     const topology = q.key === 'network_zones_description'
@@ -272,6 +279,7 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
       }
       setDemoUndo({ keys, answers, notes, contacts, frameworks })
       setAnswers(nextAnswers); setNotes(nextNotes); setContacts(nextContacts)
+      if (phase !== 'information') setImpactInputRevision(value => value + 1)
       if (phase === 'all') { setFrameworks(demo.frameworks ?? frameworks); setStep(0) }
       change()
       if (phase === 'information') await save(false, { ...body, answers: nextAnswers, notes: nextNotes, department_contacts: nextContacts })
@@ -283,6 +291,7 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
     const restore = <T,>(now: Record<string, T>, before: Record<string, T>) => ({ ...Object.fromEntries(Object.entries(now).filter(([key]) => !demoUndo.keys.includes(key))), ...Object.fromEntries(Object.entries(before).filter(([key]) => demoUndo.keys.includes(key))) })
     const nextAnswers = restore(answers, demoUndo.answers), nextNotes = restore(notes, demoUndo.notes)
     setAnswers(nextAnswers); setNotes(nextNotes)
+    if (phase !== 'information') setImpactInputRevision(value => value + 1)
     if (demoUndo.keys.includes('system_owner')) setContacts(demoUndo.contacts)
     if (phase === 'all') { setFrameworks(demoUndo.frameworks); setStep(0) }
     change(); setDemoUndo(null)
@@ -310,8 +319,7 @@ function Editor({ detail, settings, phase }: { detail: SystemDetail; settings: S
     <div className="mlps-layout"><aside className="mlps-rail"><div className="mlps-progress"><strong>{progressComplete}<small> / {progressQuestions.length}</small></strong><span>{t('已填写问题', 'Questions answered')}</span><progress value={progressComplete} max={progressQuestions.length} /></div><nav aria-label={t('问卷章节', 'Questionnaire sections')}>{steps.map(([code, zh, en], i) => { if (phase === 'grading' && i !== 0 || phase === 'information' && i === 0) return null; const qs = visible.filter(q => inStep(q, i)); const count = qs.filter(answered).length; return <button key={code} onClick={() => setStep(i)} aria-current={step === i ? 'step' : undefined} className={step === i ? 'active' : ''}><span className="mlps-step-letter">{count === qs.length && count > 0 ? <Check size={15} /> : i === 0 ? '1' : code}</span><span>{t(zh, en)}<small>{count} / {qs.length}</small></span></button> })}</nav><p>{t('规则草稿 · 不调用模型', 'Rule-based draft · No model call')}</p></aside>
     <main className="mlps-main"><div ref={sectionHeading} className="mlps-section-heading"><span className="eyebrow">{step < steps.length ? `${steps[step][0]} / ${phase === 'information' ? '05 TOPICS' : phase === 'grading' ? 'GRADING' : '06 STEPS'}` : 'REVIEW / MATRIX'}</span><h3>{step < steps.length ? t(steps[step][1], steps[step][2]) : t('检查信息与初步定级', 'Review information and preliminary grade')}</h3>{step === 0 && <p>{t('分别选择受侵害客体和损害程度，取矩阵最高等级。未核实的客体仍按未知处理。', 'Choose affected parties and severities; use the highest matrix grade. Unverified parties remain unknown.')}</p>}</div>
     <fieldset disabled={locked} className="mlps-fields">
-      {compactGrading.length > 0 && <div className="mlps-grading-compact">{compactGrading.map(field)}</div>}
-      {current.filter(q => !compactGrading.includes(q)).map(field)}
+      {questionGroups.map(group => step === 0 && compactGradingKeys.has(group[0].key) ? <div className="mlps-grading-compact" key={group[0].key}>{group.map(field)}</div> : group.map(field))}
     </fieldset>
     <footer className="mlps-footer"><span role="status">{step === steps.length - 1 && progressComplete < progressQuestions.length ? t(`还有 ${progressQuestions.length - progressComplete} 个问题待填写`, `${progressQuestions.length - progressComplete} questions remain`) : dirty ? t('有未保存更改', 'Unsaved changes') : t('草稿已载入 / 已保存', 'Draft loaded / saved')}</span><div><Button variant="secondary" disabled={step === (phase === 'information' ? 1 : 0) || locked} onClick={() => setStep(step - 1)}><ArrowLeft size={15} />{t('上一步', 'Back')}</Button><Button variant="secondary" disabled={locked || !frameworks.length} onClick={() => void save()}>{t('保存草稿', 'Save draft')}</Button>{phase === 'all' && step < steps.length - 1 && <Button variant="secondary" disabled={locked || !frameworks.length || complete < visible.length} onClick={async () => { if (await save() && await preview()) setStep(steps.length) }}>{t('查看系统等级', 'View system grade')}<ArrowRight size={15} /></Button>}{step < steps.length && <Button disabled={locked || !frameworks.length || step === steps.length - 1 && complete < visible.length} onClick={async () => { if (await save(false, body, true)) { if (step === 0) { if (phase === 'grading') navigate(`/systems/${detail.system.id}/grade-result`); else if (await preview()) setEarlyResult(true) } else if (phase === 'information' && step === steps.length - 1) { try { await run(`/systems/${detail.system.id}/information-confirmations`, body); setDirty(false); navigate(`/systems/${detail.system.id}/controls`) } catch { /* Validation errors remain visible for correction. */ } } else if (step < steps.length - 1 || await preview()) setStep(step + 1) } }}>{step === 0 ? t('先计算系统等级', 'Calculate grade first') : phase === 'information' && step === steps.length - 1 ? t('确认系统信息', 'Confirm system information') : step === steps.length - 1 ? t('下一步：查看系统等级', 'Next: view system grade') : t('保存并继续', 'Save & continue')}<ArrowRight size={15} /></Button>}</div></footer></main></div>
   </section>

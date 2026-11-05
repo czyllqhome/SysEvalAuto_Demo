@@ -1,6 +1,10 @@
 import asyncio
+from copy import deepcopy
+from io import BytesIO
+from pathlib import Path
 
 import pytest
+from docx import Document
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -12,6 +16,7 @@ from test_applicability import prepare
 from test_workflow import command, current
 
 PATH = '/api/v1/admin/prd-template'
+LEGACY_TEMPLATE = Path(__file__).parents[1] / 'fixtures/prd-layout-v3.md'
 
 
 def save(client, template):
@@ -94,7 +99,7 @@ def test_default_prd_groups_visible_questions_and_preserves_blanks(language):
     result = render({'summary': '', 'requirements': [], 'assumptions': [], 'open_questions': []},
                     source, language, {'version': 0, 'hash': digest(template), 'template': template})
     sections = result.split('\n## ')[1:]
-    assert len(sections) == 12
+    assert len(sections) == 8
     assert 'A01' in sections[0] and 'A03' in sections[1]
     assert 'Approval flow' in sections[2]
     assert 'questionnaire:A05 ' not in result
@@ -102,6 +107,7 @@ def test_default_prd_groups_visible_questions_and_preserves_blanks(language):
     assert 'RTO: 0' in sections[7] and 'B05' in sections[5]
     assert 'HIDDEN ANSWER' not in result and 'RETIRED ANSWER' not in result
     assert 'Q-001' not in result and '{{' not in result
+    assert all(removed not in result for removed in ['## 9 ', 'syseval:prd-appendix', 'Appendix', 'ASM-', '## traceability'])
     assert ('### 系统正式名称及简称\n\n待补充' if language == 'zh' else '### System name and abbreviation\n\nTo complete') in result
 
 
@@ -151,7 +157,8 @@ def test_default_template_omits_duplicate_context_fields_and_allows_missing_summ
 
 
 @pytest.mark.parametrize('language', ['zh', 'en'])
-def test_compact_security_groups_controls_once_and_keeps_authored_prose_in_appendix(language):
+@pytest.mark.parametrize('layout', [3, 4])
+def test_compact_security_groups_controls_once_and_preserves_supporting_records(language, layout):
     from app.domain import digest
     from app.prd_templates import DEFAULT, render
     from test_workflow import BRIEF
@@ -168,7 +175,8 @@ def test_compact_security_groups_controls_once_and_keeps_authored_prose_in_appen
     source = {'name': 'Example', 'revision': 1, 'context_revision_id': 'ctx', 'generation_mode': 'local',
               'context': BRIEF, 'controls': controls, 'classification': {'effective_level': 2, 'answers': {
                   'data_volume_ranges': {'records': 'under_100k', 'storage': '1_10tb'}}}}
-    template = {'filename': 'v3.md', 'content': DEFAULT.read_text(encoding='utf-8')}
+    original_records = deepcopy((data, source))
+    template = {'filename': f'v{layout}.md', 'content': (LEGACY_TEMPLATE if layout == 3 else DEFAULT).read_text(encoding='utf-8')}
     result = render(data, source, language, {'version': 0, 'hash': digest(template), 'template': template})
     chapter = result.split('## 7 ')[1].split('## 8 ')[0]
     original = '控制原文一' if language == 'zh' else 'Original control one'
@@ -177,8 +185,12 @@ def test_compact_security_groups_controls_once_and_keeps_authored_prose_in_appen
     assert ('### 网络安全' if language == 'zh' else '### Network security') in chapter
     assert '### Data security' in chapter
     assert all(noise not in chapter for noise in ['REQ-', 'CONTROL-', 'source.xlsx', 'SECRET PROCEDURE', 'must', 'Authored project detail', 'Verify authorized access'])
-    appendix = result.split('<!-- syseval:prd-appendix -->')[1]
-    assert all(text in appendix for text in ['REQ-001', 'REQ-002', 'CONTROL-ONE', 'CONTROL-TWO', 'Authored project detail', 'Verify authorized access', 'F1'])
+    if layout == 3:
+        appendix = result.split('<!-- syseval:prd-appendix -->')[1]
+        assert all(text in appendix for text in ['REQ-001', 'REQ-002', 'CONTROL-ONE', 'CONTROL-TWO', 'Authored project detail', 'Verify authorized access', 'F1'])
+    else:
+        assert all(text not in result for text in ['## 9 ', 'syseval:prd-appendix', 'Authored project detail', 'Verify authorized access', '## security_details', '## traceability', '## constraints', '## document_info', '## review'])
+    assert (data, source) == original_records
     assert 'under_100k' not in result and '1_10tb' not in result
     assert '本地规则草稿' in result if language == 'zh' else 'Local rule-based draft' in result
 
@@ -208,3 +220,49 @@ def test_apply_template_forbidden_after_supplier_dispatch(owner):
     prd_id = current(client, sid)['prd']['id']
     command(client, sid, 'prd-versions', {'refresh_template': True, 'prd_id': prd_id}, expected=409)
     command(vendor, sid, 'prd-versions', {'refresh_template': True, 'prd_id': prd_id}, expected=404)
+
+
+@pytest.mark.parametrize('language', ['zh', 'en'])
+def test_refresh_to_eight_chapters_updates_downloads_and_retains_legacy_prd_and_requirement_records(owner, language):
+    from app.domain import digest
+    from app.prd_templates import DEFAULT
+    from test_workflow import prepare as prepare_workflow
+
+    app, client, sid = prepare_workflow(owner)
+    save(client, {'filename': 'previous-v3.md', 'content': LEGACY_TEMPLATE.read_text(encoding='utf-8')})
+    command(client, sid, 'jobs', {'kind': 'prd_generation', 'mode': 'local', 'language': language})
+    assert asyncio.run(worker.run_once(app.state.sessions))
+    command(client, sid, 'prd-approval')
+    before = current(client, sid)
+    original = before['prd']
+    old_path = f"/api/v1/systems/{sid}/prd-versions/{original['id']}/document"
+    old_markdown = client.get(old_path).text
+    assert '## 9 ' in old_markdown and 'syseval:prd-appendix' in old_markdown
+    save(client, {'filename': 'current-v4.md', 'content': DEFAULT.read_text(encoding='utf-8')})
+    after = command(client, sid, 'prd-versions', {'refresh_template': True, 'prd_id': original['id']}).json()
+    prd = after['prd']
+    assert prd['id'] != original['id'] and not prd['approved']
+    assert prd['data'] == original['data'] and prd['mode'] == original['mode'] and prd['language'] == language
+    assert after['system']['revision'] == before['system']['revision']
+    assert after['controls'] == before['controls']
+    assert all(r['acceptance_criteria'] for r in prd['data']['requirements'])
+    new_path = f"/api/v1/systems/{sid}/prd-versions/{prd['id']}/document"
+    markdown = client.get(new_path).text
+    assert markdown.count('\n## ') == 8 and 'syseval:prd-layout-v4' in markdown
+    for removed in ['## 9 ', 'syseval:prd-appendix', 'Appendix', 'ASM-', '假设与待确认', 'Assumptions and questions', '## traceability', '## constraints', '## review']:
+        assert removed not in markdown
+    response = client.get(new_path, params={'format': 'docx'})
+    assert response.status_code == 200
+    document = Document(BytesIO(response.content))
+    assert [p.text for p in document.paragraphs if p.style.name == 'Heading 1'] == [
+        line[3:] for line in markdown.splitlines() if line.startswith('## ')]
+    word_text = '\n'.join(p.text for p in document.paragraphs)
+    assert 'Service levels' in word_text and 'Delivery and open questions' not in word_text
+    assert 'Appendix' not in word_text
+    assert client.get(old_path).text == old_markdown
+    with app.state.sessions() as db:
+        saved = db.get(Prd, prd['id'])
+        assert saved.content_hash == digest({'data': saved.data, 'markdown': markdown, 'renderer': 'R1'})
+        assert db.get(Prd, original['id']).content_hash == original['content_hash']
+        assert db.get(Prd, original['id']).approved
+        assert recorded(db, saved)['template']['filename'] == 'current-v4.md'

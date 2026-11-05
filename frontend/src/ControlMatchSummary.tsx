@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { Control, SystemDetail } from './types'
 import { useLocale } from './i18n'
 
@@ -73,8 +73,14 @@ export function exemptionReason(c: Control, t: (zh: string, en: string) => strin
     return t('依据已确认适用条件自动判定不适用。', 'Not applicable under confirmed applicability rules.')
   }
 
-export default function ControlMatchSummary({ detail, domains }: { detail: SystemDetail; domains: Record<string, readonly [string, string]> }) {
+export default function ControlMatchSummary({ detail, domains, onRestore, disabled = false }: {
+  detail: SystemDetail
+  domains: Record<string, readonly [string, string]>
+  onRestore?: (control: Control) => void
+  disabled?: boolean
+}) {
   const { t, pair } = useLocale()
+  const reasonTableId = useId()
   const summary = summarizeControls(detail)
   const deploymentExemptions = summary.excluded.filter(c => ruleExemptionKind(c) === 'deployment').length
   const scopeExemptions = summary.excluded.filter(c => ruleExemptionKind(c) === 'scope').length
@@ -89,11 +95,16 @@ export default function ControlMatchSummary({ detail, domains }: { detail: Syste
     { key: 'pending', label: t('待确认', 'Pending'), count: summary.pending },
   ]
   return <section className="control-match-summary" aria-label={t('控制匹配统计', 'Control matching summary')}>
-    <p>{t('统计基于本次所选等级和已固定的控制库，不受搜索、分页或控制域筛选影响。通用控制在确认不涉及相关开发、运维活动，或云部署下豁免物理环境控制时计入豁免；非云部署下的云安全扩展计入不适用。人工排除仍计入豁免并需例外审查；条件不明的条目保留待确认。', 'Counts use the selected reference levels and pinned catalog, across all pages and filters. General controls for confirmed out-of-scope development or operations, and physical-environment controls under cloud deployment, count as exemptions. Cloud extensions are not applicable to non-cloud deployment. Manual exclusions remain exemptions requiring exception review. Unknown conditions remain pending.')}</p>
-    <div className="stat-strip">{stats.map(({ key, label, count }) => <div key={key}><span>{label}{!!count && (key === 'exempted' || key === 'inapplicable') && <button className="inline-action" aria-expanded={reasonKind === key} onClick={() => setReasonKind(reasonKind === key ? null : key)}>{key === 'inapplicable' ? t('不适用原因', 'Applicability reasons') : t('豁免原因', 'Exemption reasons')}</button>}</span><strong>{count}</strong></div>)}</div>
+    <div className="stat-strip">{stats.map(({ key, label, count }) => <div key={key}>
+      <span>{label}</span><strong>{!!count && (key === 'exempted' || key === 'inapplicable')
+        ? <button type="button" className="control-stat-toggle" aria-expanded={reasonKind === key} aria-controls={reasonTableId}
+          aria-label={key === 'inapplicable' ? t(`不适用原因（${count}条）`, `Applicability reasons (${count} controls)`) : t(`豁免原因（${count}条）`, `Exemption reasons (${count} controls)`)}
+          onClick={() => setReasonKind(reasonKind === key ? null : key)}>{count}</button>
+        : count}</strong>
+    </div>)}</div>
     {!!summary.additional && <p>{t('额外纳入条目', 'Additional included controls')}: {summary.additional}</p>}
     {!!summary.excluded.length && <p className="control-exemption-breakdown">{t(`豁免构成：部署规则 ${deploymentExemptions} 条，范围规则 ${scopeExemptions} 条，人工排除 ${manualExemptions} 条。`, `Exemption breakdown: ${deploymentExemptions} deployment-rule, ${scopeExemptions} scope-rule, ${manualExemptions} manual exclusions.`)}</p>}
-    {!!reasonRows.length && <div className="table-scroll"><table className="control-reason-table">
+    <div id={reasonTableId} className="table-scroll" hidden={!reasonRows.length}>{!!reasonRows.length && <table className="control-reason-table">
       <caption>{reasonKind === 'inapplicable' ? t('不适用条目与原因', 'Not-applicable controls and reasons') : t('豁免条目与原因', 'Exempted controls and reasons')}</caption>
       <colgroup><col className="reason-source" /><col className="reason-identifier" /><col className="reason-requirement" /><col className="reason-domain" /><col className="reason-decision" /><col className="reason-explanation" /></colgroup>
       <thead><tr><th scope="col">Source</th><th scope="col">Identifier</th><th scope="col">{t('控制项原文', 'Original control text')}</th><th scope="col">{t('控制域', 'Domain')}</th><th scope="col">{t('判定方式', 'Decision type')}</th><th scope="col">{t('原因', 'Reason')}</th></tr></thead>
@@ -109,11 +120,16 @@ export default function ControlMatchSummary({ detail, domains }: { detail: Syste
           <td>{sourceField('control_identifier') ?? c.metadata?.source_ref ?? t('未提供标识', 'Identifier not provided')}</td>
           <td><p className="control-reason-original">{requirement || t('未提供控制项原文', 'Original control text not provided')}</p></td>
           <td>{domains[c.domain] ? pair(domains[c.domain]) : c.domain}</td>
-          <td>{reasonKind === 'inapplicable' ? t('规则判定不适用', 'Not applicable by rule') : isRuleExempted(c) ? ruleExemptionKind(c) === 'deployment' ? t('部署规则豁免', 'Deployment-rule exemption') : t('范围规则豁免', 'Scope-rule exemption') : t('人工排除', 'Manual exclusion')}</td>
+          <td><div className="control-reason-decision">
+            <span>{reasonKind === 'inapplicable' ? t('规则判定不适用', 'Not applicable by rule') : isRuleExempted(c) ? ruleExemptionKind(c) === 'deployment' ? t('部署规则豁免', 'Deployment-rule exemption') : t('范围规则豁免', 'Scope-rule exemption') : t('人工排除', 'Manual exclusion')}</span>
+            {c.reason?.trim() && onRestore && <button type="button" className="inline-action" disabled={disabled}
+              aria-label={`${t('撤回排除', 'Undo exclusion')} ${sourceField('control_identifier') ?? c.metadata?.source_ref ?? c.code}`}
+              onClick={() => onRestore(c)}>{t('撤回排除', 'Undo exclusion')}</button>}
+          </div></td>
           <td>{exemptionReason(c, t)}</td>
         </tr>
       })}</tbody>
-    </table></div>}
+    </table>}</div>
 
   </section>
 }

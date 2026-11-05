@@ -482,6 +482,10 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
             if not included and not reason:
                 raise DomainError("EXCLUSION_REASON_REQUIRED")
             if existing:
+                if included and not existing.included and existing.reason.strip():
+                    db.add(Audit(system_id=system.id, actor_id=user.id, action="control.exclusion_withdrawn",
+                                 detail={"revision": system.revision, "control_id": control.id,
+                                         "previous_reason": existing.reason}))
                 existing.included, existing.reason = included, reason
                 existing.origin = 'manual'
             else:
@@ -774,6 +778,20 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
             submission = service.save_submission(db, system, round_, user, body)
             return {"submission_id": submission.id}
         return command(request, db, user, system, body, "supplier.submitted", operation)
+
+    @app.post('/api/v1/systems/{system_id}/local-review')
+    def prepare_local_review(system_id: str, body: dict, request: Request,
+                             user=Depends(current), db=Depends(get_db)):
+        system = service.system_for(db, user, system_id, write=True)
+
+        def operation():
+            round_ = db.get(SupplierRound, system.round_id) if system.round_id else None
+            if not round_ or body.get('round_id') != round_.id or body.get('submission_id') != round_.submitted_id:
+                raise DomainError('VERSION_CONFLICT', 409)
+            report = service.prepare_local_review(db, system, body.get('language', 'zh'), actor_id=user.id)
+            return {'report_id': report.id}
+
+        return command(request, db, user, system, body, 'impact_analysis.requested', operation)
 
     @app.post("/api/v1/systems/{system_id}/requirement-risk")
     async def requirement_risk(system_id: str, body: dict, user=Depends(current), db=Depends(get_db)):

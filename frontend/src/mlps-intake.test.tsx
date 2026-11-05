@@ -725,17 +725,25 @@ it('starts with grading drivers and calculates before remaining questions withou
 })
 
 
-it('moves the ten compact grading questions first with stable numbers and limits the captured Demo to grading', async () => {
+it('keeps grading questions in order with two compact groups and limits the captured Demo to grading', async () => {
   const writes = setup({ answers: { system_name: 'Preserved name', system_purpose: 'Authored purpose' }, notes: { system_owner: 'Keep note' }, department_contacts: { 财务: 'Keep contact' } }, resultFixture, false, 'grading')
   await screen.findByRole('progressbar')
-  const compact = document.querySelector('.mlps-grading-compact')!
-  expect(Array.from(compact.querySelectorAll('.mlps-question-meta > span:first-child')).map(n => n.textContent)).toEqual(['G01', 'G02', 'G03', 'G04', 'G05', 'G06', 'G09', 'G10', 'G11', 'G12'])
+  const compact = document.querySelectorAll('.mlps-grading-compact')
+  expect(compact).toHaveLength(2)
+  expect(Array.from(compact[0].querySelectorAll('.mlps-question-meta > span:first-child')).map(n => n.textContent)).toEqual(['G01', 'G02', 'G03', 'G04', 'G05', 'G06'])
+  expect(Array.from(compact[1].querySelectorAll('.mlps-question-meta > span:first-child')).map(n => n.textContent)).toEqual(['G09', 'G10', 'G11', 'G12'])
+  expect(Array.from(document.querySelectorAll('.mlps-fields > .mlps-grading-compact > .mlps-question, .mlps-fields > .mlps-question')).map(n => n.querySelector('.mlps-question-meta > span:first-child')?.textContent)).toEqual(Array.from({ length: 14 }, (_, i) => `G${String(i + 1).padStart(2, '0')}`))
   expect(Array.from(document.querySelectorAll('.mlps-fields > .mlps-question .mlps-question-meta > span:first-child')).map(n => n.textContent)).toEqual(['G07', 'G08', 'G13', 'G14'])
   fireEvent.click(screen.getByText('一键填入 Demo'))
   expect(writes).toHaveLength(0)
   expect(screen.getByLabelText('主要负责外部单位名称（必填）')).toHaveValue('PwC Cyber ')
   expect(screen.getByLabelText('本系统处理的个人信息涉及多少人（按去重人数选择范围）？')).toHaveValue('100,000 人及以上')
   expect(screen.getByRole('progressbar')).toHaveAttribute('value', '14')
+  const impactReason = '系统不涉及核心业务流程，主要作为辅助用途。不涉及个人敏感信息，不涉及重要信息，不涉及核心信息'
+  for (const code of ['G13', 'G14']) {
+    const question = Array.from(document.querySelectorAll('.mlps-fields > .mlps-question')).find(n => n.querySelector('.mlps-question-meta > span:first-child')?.textContent === code)!
+    expect(within(question as HTMLElement).getByRole('textbox')).toHaveValue(impactReason)
+  }
   fireEvent.click(screen.getByText('English'))
   expect(screen.getByLabelText('Responsible external organization (required)')).toHaveValue('PwC Cyber ')
   fireEvent.click(screen.getByText('Save draft'))
@@ -744,6 +752,8 @@ it('moves the ten compact grading questions first with stable numbers and limits
   expect(writes[0].department_contacts).toEqual({ 财务: 'Keep contact' })
   expect(writes[0].notes).toMatchObject({ system_owner: 'Keep note' })
   expect(writes[0].notes).toMatchObject({ security_responsible_entity: 'PwC Cyber ' })
+  fireEvent.click(screen.getByText('Undo Demo fill'))
+  for (const select of screen.getAllByLabelText('Affected party 1')) expect(select).toHaveValue('')
 })
 
 it('removes the independent-business question in both languages and preserves its historical answer', async () => {

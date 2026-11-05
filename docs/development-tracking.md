@@ -1,5 +1,11 @@
 # 开发进度追踪 / Development tracking
 
+2026-11-06：标题为“安全审计 / Security audit”的可编辑开发项增加“一键填入 Demo”。它通过有上传权限的只读接口获取本评估真实审计事件摘录，生成带时间、角色、事件与记录引用的 PNG；账号、凭据和事件 detail 不进入图片。说明与环境/版本/采集日期填入可编辑草稿，图片沿用现有上传权限、条目版本及配额检查。单一验收条件关联该图片；多个条件继续由用户核对映射。填入不会自动保存、提交验收、调用 AI 或接受交付，撤销恢复填入前内容，已上传的附件记录保留。正式提交前仍须核验全用户覆盖、留存周期、防篡改和告警等截图未证明的部分。中英文正文不含“演示 / demo”等词，按钮仅作为填入入口。
+
+English: The Security audit item can fill an editable draft from actual system-scoped audit events and attach a rendered log excerpt. The read-only preview requires supplier upload authority and an editable, current batch. It omits identities and event details, preserves references, and does not assert unverified retention or completeness. Uploading, saving, submission and independent human acceptance retain their existing checks. Undo restores prior authored input.
+
+交付材料的采集日期与日志摘录统一按北京时间核验，避免凌晨将当天日期误判为未来日期；后续日期仍禁止提交。Collection dates use the Beijing calendar day in both UI and server validation.
+
 2026-11-05，Demo 的开发追踪页采用深色导航、连续阶段条、白色任务卡及蓝/紫/浅金信息区。入口为左侧“开发进度追踪”及评估第九步。双方确认后的评估默认进入此步骤；已有批次直接在评估内展开。
 
 ## 使用流程

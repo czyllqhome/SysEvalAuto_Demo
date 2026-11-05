@@ -153,10 +153,11 @@ def test_new_prd_template_preserves_source_coverage_and_snapshot(source_owner):
     assert detail['system']['status'] == 'PRD_REVIEW', detail.get('jobs')
     with app.state.sessions() as db:
         prd = db.get(Prd, detail['prd']['id'])
-        assert '<!-- syseval:prd-layout-v3 -->' in prd.markdown
+        assert '<!-- syseval:prd-layout-v4 -->' in prd.markdown
         assert len(prd.data['requirements']) == 136
         assert 'Local rule-based draft' in prd.markdown
-        assert 'MLPS_level_2_CN.xlsx' in prd.markdown
+        assert any('MLPS_level_2_CN.xlsx' in str(c.get('metadata', {})) for c in detail['controls'] if c['included'])
+        assert 'syseval:prd-appendix' not in prd.markdown
         assert 'Control source missing in this language' not in prd.markdown
 
 

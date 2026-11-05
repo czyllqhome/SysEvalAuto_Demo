@@ -51,7 +51,8 @@ export function deliveryMatches(item: DeliveryItem, batch: DeliveryBatch, filter
 }
 
 // Mirrors the existing submission contract; the server remains authoritative.
-export function evidenceReadiness(item: DeliveryItem, draft: Draft, today = new Date().toISOString().slice(0, 10)) {
+export const deliveryToday = (now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+export function evidenceReadiness(item: DeliveryItem, draft: Draft, today = deliveryToday()) {
   const date = draft.collected_on ?? ''
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date && date <= today
   const metadata = !!draft.description?.trim() && !!draft.environment?.trim() && !!draft.system_version?.trim() && validDate

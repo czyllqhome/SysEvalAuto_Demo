@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
+import { StrictMode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ImpactPanel } from './downstream'
@@ -45,8 +46,13 @@ function withReport(): SystemDetail {
 
 function row(n: number) { return within(screen.getByText(`需求原文 ${n}`).closest('tr')!) }
 
-function show(detail: SystemDetail, vendor = false) {
-  return render(<QueryClientProvider client={new QueryClient()}><LocaleProvider><AuthContext.Provider value={{ user: { id: 'u', name: 'Owner', email: 'test@example.test', role: vendor ? 'vendor' : 'owner', org_id: 'org' }, csrf: '', model_configured: true }}><Preferences><MemoryRouter><LanguageSwitch /><LocationView /><ImpactPanel detail={detail} /></MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
+function LiveReview({ initial }: { initial: SystemDetail }) {
+  const query = useQuery({ queryKey: ['system', initial.system.id], queryFn: async () => initial, initialData: initial, enabled: false })
+  return <ImpactPanel detail={query.data} />
+}
+
+function show(detail: SystemDetail, vendor = false, live = false) {
+  return render(<QueryClientProvider client={new QueryClient()}><LocaleProvider><AuthContext.Provider value={{ user: { id: 'u', name: 'Owner', email: 'test@example.test', role: vendor ? 'vendor' : 'owner', org_id: 'org' }, csrf: '', model_configured: true }}><Preferences><MemoryRouter><LanguageSwitch /><LocationView />{live ? <StrictMode><LiveReview initial={detail} /></StrictMode> : <ImpactPanel detail={detail} />}</MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
 }
 
 it.each(['changes', 'accept'] as const)('saves current owner decisions and advances the %s workflow', async decision => {
@@ -58,7 +64,7 @@ it.each(['changes', 'accept'] as const)('saves current owner decisions and advan
   const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => result })
   vi.stubGlobal('fetch', fetcher)
   show(detail)
-  fireEvent.click(screen.getByRole('button', { name: '保存审查决定' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存并下发至供应商' }))
   await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(decision === 'changes' ? '/systems/s/supplier' : '/systems/s/agreement'))
   expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ report_id: 'report', advance_workflow: true, decisions: { 'F-1': { decision, reason: '使用指定工具' } } })
 })
@@ -76,20 +82,21 @@ it('shows Medium after saved high-risk acceptance while retaining the original s
   fireEvent.click(row(1).getByText('控制项原文与来源'))
   expect(row(1).getByText('来源风险：高风险')).toBeVisible()
   expect(row(1).getByText('负责人承担风险')).toBeVisible()
-  expect(screen.queryByRole('button', { name: '保存审查决定' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '保存并下发至供应商' })).not.toBeInTheDocument()
 })
 
 it('shows confirmation instead of an AI result and filters source risk without changing totals', () => {
   const fetcher = vi.fn()
   vi.stubGlobal('fetch', fetcher)
-  show(fixture())
+  show(withReport())
   expect(screen.getByText('40.0%')).toBeVisible()
   expect(screen.getByRole('progressbar')).toHaveAttribute('value', '2')
   expect(screen.getByText('需求原文 1')).toBeVisible()
   expect(screen.getByText('需求原文 3')).toBeVisible()
   expect(screen.queryByText('需求原文 4')).not.toBeInTheDocument()
   expect(screen.queryByText(/系统安全评估结果/)).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: '按需启动 AI 影响评估' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: '开始人工审查（本地规则）' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '按需启动 AI 影响评估' })).not.toBeInTheDocument()
   expect(screen.queryByText('后续审查与双方确认')).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: '中风险未确认 (1)' }))
   expect(screen.getByText('需求原文 2')).toBeVisible()
@@ -121,9 +128,10 @@ it('reviews inside the domain table, preserves filtered decisions and requires i
   expect(row(1).getByRole('option', { name: '接受并承担已记录残余风险' })).toBeEnabled()
   expect(row(3).getByLabelText('负责人决定')).toBeVisible()
   expect(fetcher).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: '一键接受可实施项 (2)' }))
-  fireEvent.change(screen.getByLabelText('批量审查理由'), { target: { value: 'Shared follow-up' } })
-  fireEvent.click(screen.getByRole('button', { name: '接受未处理项并记录理由' }))
+  expect(screen.queryByRole('button', { name: /一键接受可实施项/ })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '待负责人审查 (3)' })).toBeVisible()
+  fireEvent.change(row(2).getByLabelText('负责人决定'), { target: { value: 'accept' } })
+  fireEvent.change(row(2).getByLabelText('理由与责任安排'), { target: { value: 'Shared follow-up' } })
   expect(row(1).getByLabelText('负责人决定')).toHaveValue('')
   fireEvent.change(row(1).getByLabelText('负责人决定'), { target: { value: 'changes' } })
   fireEvent.change(row(1).getByLabelText('理由与责任安排'), { target: { value: 'Shared follow-up' } })
@@ -140,15 +148,17 @@ it('reviews inside the domain table, preserves filtered decisions and requires i
   expect(screen.getByRole('button', { name: '待负责人审查 (0)' })).toBeVisible()
   expect(screen.queryByText('例外与排除项审查')).not.toBeInTheDocument()
   expect(screen.queryByLabelText('例外审查结论')).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeEnabled()
-  fireEvent.click(screen.getByRole('button', { name: '保存审查决定' }))
+  expect(screen.getByRole('button', { name: '保存并下发至供应商' })).toBeEnabled()
+  fireEvent.click(screen.getByRole('button', { name: '保存并下发至供应商' }))
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
   expect(JSON.parse(fetcher.mock.calls[0][1].body)).not.toHaveProperty('exception_reason')
   expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ version: 1, decisions: {
     'F-1': { decision: 'changes', reason: 'Shared follow-up' },
     'F-3': { decision: 'accept', owner_reviewed: true, reason: '负责人落实补充证据并承担残余风险' },
-    'F-4': { decision: 'accept' }, 'F-5': { decision: 'accept' },
+    'F-2': { decision: 'accept', reason: 'Shared follow-up' },
   } })
+  expect(JSON.parse(fetcher.mock.calls[0][1].body).decisions).not.toHaveProperty('F-4')
+  expect(JSON.parse(fetcher.mock.calls[0][1].body).decisions).not.toHaveProperty('F-5')
   expect(screen.getByRole('button', { name: '冻结方案并收集双方确认' })).toBeDisabled()
   fireEvent.click(screen.getByRole('button', { name: 'English' }))
   expect(row(3).getByLabelText('Owner decision')).toHaveValue('accept')
@@ -160,13 +170,64 @@ it('keeps all findings of a requirement independently reviewable and counts pend
   detail.report!.data.findings.push({ ...detail.report!.data.findings[1], id: 'F-extra', title: 'Second finding' })
   show(detail)
   expect(row(2).getAllByLabelText('负责人决定')).toHaveLength(2)
-  expect(screen.getByRole('button', { name: '待负责人审查 (5)' })).toBeVisible()
+  expect(screen.getByRole('button', { name: '待负责人审查 (3)' })).toBeVisible()
   fireEvent.change(row(2).getAllByLabelText('负责人决定')[0], { target: { value: 'accept' } })
   fireEvent.change(row(2).getAllByLabelText('理由与责任安排')[0], { target: { value: 'First finding addressed' } })
-  expect(screen.getByRole('button', { name: '待负责人审查 (5)' })).toBeVisible()
-  fireEvent.click(screen.getByRole('button', { name: '待负责人审查 (5)' }))
+  expect(screen.getByRole('button', { name: '待负责人审查 (3)' })).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '待负责人审查 (3)' }))
   expect(row(2).getByText('Second finding')).toBeVisible()
-  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '保存并下发至供应商' })).toBeDisabled()
+})
+
+it('shows four labeled response counts and filters each without changing authored text or totals', () => {
+  show(withReport())
+  const distribution = within(screen.getByRole('group', { name: '按供应商答复查看' }))
+  expect(distribution.getAllByRole('button')).toHaveLength(4)
+  for (const [label, requirement] of [['可完成 2 项', 4], ['部分完成 1 项', 2], ['无法完成 1 项', 1], ['待澄清 1 项', 3]] as const) {
+    fireEvent.change(screen.getByLabelText('搜索开发项'), { target: { value: 'clear this stale query' } })
+    fireEvent.click(distribution.getByRole('button', { name: label }))
+    expect(distribution.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText(`需求原文 ${requirement}`)).toBeVisible()
+    expect(screen.getByText('40.0%')).toBeVisible()
+  }
+  expect(screen.queryByText('可完成 / 部分 / 无法 / 待澄清')).not.toBeInTheDocument()
+  expect(screen.queryByText('2 / 1 / 1 / 1')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'English' }))
+  expect(screen.getByRole('button', { name: 'Clarify: 1 items' })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByText('供应商说明 3')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: 'Needs attention (3)' }))
+  expect(screen.getByLabelText('Confirmation status')).toHaveValue('all')
+  expect(screen.getByText('需求原文 1')).toBeVisible()
+  expect(screen.getByText('需求原文 2')).toBeVisible()
+})
+
+it('keeps submitted yes items out of owner decisions even when the mutable draft disagrees', () => {
+  const detail = withReport()
+  detail.round!.draft['REQ-4'] = { implementation_status: 'no', duration_workdays: null, owner_name: '', implementation_plan: '', limitations: 'Mutable draft', alternative: '' }
+  const fetcher = vi.fn()
+  vi.stubGlobal('fetch', fetcher)
+  show(detail)
+  expect(screen.getByRole('button', { name: '待负责人审查 (3)' })).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '已确认可完成 (2)' }))
+  expect(row(4).getByText('供应商已确认开发')).toBeVisible()
+  expect(row(4).queryByLabelText('负责人决定')).not.toBeInTheDocument()
+  expect(row(5).queryByLabelText('理由与责任安排')).not.toBeInTheDocument()
+  expect(fetcher).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'English' }))
+  expect(row(4).getByText('Supplier committed to delivery')).toBeVisible()
+})
+
+it('lets an all-confirmed round proceed to joint confirmation without repeated review actions', () => {
+  const detail = withReport()
+  detail.supplier_review!.counts = { total: 5, yes: 5, partial: 0, no: 0, needs_clarification: 0, unanswered: 0, attention: 0, high_unconfirmed: 0, medium_unconfirmed: 0 }
+  detail.supplier_review!.items.forEach(item => { item.status = 'yes'; item.answer = { implementation_status: 'yes' } })
+  detail.report!.source_assessment!.blocking_requirements = []
+  detail.report!.source_assessment!.clarification_requirements = []
+  show(detail)
+  expect(screen.getByRole('button', { name: '待负责人审查 (0)' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: '保存并下发至供应商' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '一键填入 Demo' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '冻结方案并收集双方确认' })).toBeEnabled()
 })
 
 it('fills the three authored review examples without saving, can undo, and requires individual high-risk acknowledgement', async () => {
@@ -199,22 +260,24 @@ it('fills the three authored review examples without saving, can undo, and requi
   expect(row(1).getByLabelText('理由与责任安排')).toHaveValue('Before Demo, unsaved')
   expect(row(2).getByLabelText('负责人决定')).toHaveValue('')
   fireEvent.click(screen.getByRole('button', { name: '一键填入 Demo' }))
-  fireEvent.click(screen.getByRole('button', { name: '一键接受可实施项 (1)' }))
-  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeDisabled()
+  expect(screen.queryByRole('button', { name: /一键接受可实施项/ })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '保存并下发至供应商' })).toBeDisabled()
   fireEvent.click(row(2).getByRole('checkbox', { name: '我已逐项核对本项决定与责任安排' }))
-  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '保存并下发至供应商' })).toBeDisabled()
   fireEvent.click(row(3).getByRole('checkbox', { name: '我已逐项核对本项决定与责任安排' }))
-  expect(screen.getByRole('button', { name: '保存审查决定' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: '保存并下发至供应商' })).toBeEnabled()
   expect(screen.queryByLabelText('例外审查结论')).not.toBeInTheDocument()
   expect(fetcher).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: '保存审查决定' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存并下发至供应商' }))
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
   expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ decisions: {
     'F-1': { decision: 'changes', reason: '使用指定工具' },
     'F-2': { decision: 'accept', owner_reviewed: true, reason: '定期进行漏洞和系统安全评估' },
     'F-3': { decision: 'accept', owner_reviewed: true, reason: '需经过正是审批流程' },
-    'F-4': { decision: 'accept', reason: 'Keep other authored decision' },
   } })
+  fireEvent.click(screen.getByRole('button', { name: '已确认可完成 (2)' }))
+  expect(row(4).getByText('Keep other authored decision')).toBeInTheDocument()
+  expect(row(4).queryByLabelText('负责人决定')).not.toBeInTheDocument()
 })
 
 it('runs single-item AI only on request inside its table row and preserves review input', async () => {
@@ -244,24 +307,55 @@ it('shows submitted decisions read-only for suppliers and links to independent b
   show(detail, true)
   expect(row(1).getByText('Saved owner rationale')).toBeVisible()
   expect(screen.queryByLabelText('负责人决定')).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: '保存审查决定' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '保存并下发至供应商' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /一键接受/ })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '一键填入 Demo' })).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: '查看并确认基线' })).toHaveAttribute('href', '/systems/s/agreement')
   expect(screen.queryByRole('button', { name: '确认这份基线' })).not.toBeInTheDocument()
 })
 
-it('only schedules subsequent review after the owner explicitly requests it', async () => {
+it.each(['zh', 'en'])('automatically prepares missing local review and opens owner decisions without a mode choice (%s)', async language => {
+  localStorage.setItem('scope-language', language)
   const detail = fixture()
-  const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => detail })
+  const prepared = withReport()
+  prepared.system.version = 2
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => prepared })
+  vi.stubGlobal('fetch', fetcher)
+  show(detail, false, true)
+  await screen.findAllByLabelText(language === 'zh' ? '负责人决定' : 'Owner decision')
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
+  expect(fetcher.mock.calls[0][0]).toBe('/api/v1/systems/s/local-review')
+  expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ round_id: 'round', submission_id: 'submission', language, version: 1 })
+  expect(screen.queryByText(/按需开始后续审查|Start further review when needed/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /开始人工审查|Start manual review|按需启动 AI|Request AI impact/ })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: language === 'zh' ? '需关注 (3)' : 'Needs attention (3)' })).toHaveAttribute('aria-pressed', 'true')
+  expect(row(1).getByLabelText(language === 'zh' ? '负责人决定' : 'Owner decision')).toHaveValue('')
+  expect(screen.getAllByLabelText(language === 'zh' ? '负责人决定' : 'Owner decision')).toHaveLength(3)
+  expect(screen.getByRole('button', { name: language === 'zh' ? '保存并下发至供应商' : 'Save and send to supplier' })).toBeDisabled()
+})
+
+it('offers only a local retry after preparation fails, without retrying on its own', async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({ code: 'VERSION_CONFLICT' }) })
+    .mockResolvedValue({ ok: true, json: async () => withReport() })
+  vi.stubGlobal('fetch', fetcher)
+  show(fixture(), false, true)
+  expect(await screen.findByRole('alert')).toHaveTextContent('内容已有更新')
+  expect(fetcher).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByRole('button', { name: '重试本地规则审查' }))
+  await screen.findAllByLabelText('负责人决定')
+  expect(fetcher).toHaveBeenCalledTimes(2)
+  expect(fetcher.mock.calls.every(([url]) => url.endsWith('/local-review'))).toBe(true)
+})
+
+it('does not prepare or offer review actions for a read-only customer', () => {
+  const detail = fixture()
+  detail.permissions = ['read']
+  const fetcher = vi.fn()
   vi.stubGlobal('fetch', fetcher)
   show(detail)
-  expect(screen.getByRole('button', { name: '开始人工审查（本地规则）' })).toBeVisible()
+  expect(screen.getByText('答复已提交，等待负责人审查。')).toBeVisible()
+  expect(screen.queryByLabelText('负责人决定')).not.toBeInTheDocument()
   expect(fetcher).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: '开始人工审查（本地规则）' }))
-  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
-  expect(fetcher.mock.calls[0][0]).toBe('/api/v1/systems/s/jobs')
-  expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ kind: 'impact_analysis', mode: 'local', version: 1 })
 })
 
 it('shows a submitted acknowledgment to suppliers without customer review actions', () => {
@@ -275,7 +369,7 @@ it('keeps all confirmed items available and does not imply acceptance', () => {
   const detail = fixture()
   detail.supplier_review!.items = detail.supplier_review!.items.map(i => ({ ...i, status: 'yes' }))
   detail.supplier_review!.counts = { total: 5, yes: 5, partial: 0, no: 0, needs_clarification: 0, unanswered: 0, attention: 0, high_unconfirmed: 0, medium_unconfirmed: 0 }
-  show(detail)
+  show(detail, true)
   expect(screen.getByText('100.0%')).toBeVisible()
   expect(screen.getByText(/本轮没有需要关注的开发项/)).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: '全部 (5)' }))
@@ -286,7 +380,7 @@ it('keeps all confirmed items available and does not imply acceptance', () => {
 it('handles empty results and keeps unlabelled risk distinct', () => {
   const detail = fixture()
   detail.supplier_review!.items[0].source_risk = 'unknown'
-  show(detail)
+  show(detail, true)
   expect(screen.getByText('风险未标注')).toBeVisible()
   fireEvent.change(screen.getByLabelText('搜索开发项'), { target: { value: 'does not exist' } })
   expect(screen.getByText('没有符合当前筛选条件的开发项。')).toBeVisible()

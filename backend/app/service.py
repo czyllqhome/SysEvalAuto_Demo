@@ -445,23 +445,50 @@ def publish_job(db, system, job, output):
         prd_templates.record(db, prd, pinned)
         job.output = {"prd_id": prd.id}
     elif job.kind == "impact_analysis":
-        from .negotiation import carried_findings
-        evidence = redact_source(job.input["answers"]) if job.mode == "openrouter" else job.input["answers"]
-        data = validate_report(output, job.input["prd"]["requirements"], evidence,
-                               contextual_source=redact_source(job.input) if job.mode == 'openrouter' else None)
-        round_ = db.get(SupplierRound, job.input["round_id"])
-        carried, decisions = carried_findings(round_)
-        data = {**data, 'findings': [*carried, *data['findings']]}
-        if round_.snapshot.get('legacy_exceptions'):
-            decisions['_exceptions'] = round_.snapshot['legacy_exceptions']
-        report = Report(system_id=system.id, submission_id=round_.submitted_id,
-                        data=data, mode=job.mode, decisions=decisions, reviewed=False)
-        db.add(report)
-        db.flush()
-        system.report_id, system.status = report.id, "RESULT_REVIEW"
+        report = publish_impact_report(db, system, job.input, output, job.mode)
         job.output = {"report_id": report.id}
     system.updated_at = time.time()
     db.add(Audit(system_id=system.id, action=f"{job.kind}.completed", detail={"job_id": job.id, "mode": job.mode}))
+
+
+def publish_impact_report(db, system, source, output, mode):
+    from .negotiation import carried_findings
+    evidence = redact_source(source['answers']) if mode == 'openrouter' else source['answers']
+    data = validate_report(output, source['prd']['requirements'], evidence,
+                           contextual_source=redact_source(source) if mode == 'openrouter' else None)
+    round_ = db.get(SupplierRound, source['round_id'])
+    carried, decisions = carried_findings(round_)
+    data = {**data, 'findings': [*carried, *data['findings']]}
+    if round_.snapshot.get('legacy_exceptions'):
+        decisions['_exceptions'] = round_.snapshot['legacy_exceptions']
+    report = Report(system_id=system.id, submission_id=round_.submitted_id,
+                    data=data, mode=mode, decisions=decisions, reviewed=False)
+    db.add(report)
+    db.flush()
+    system.report_id, system.status = report.id, 'RESULT_REVIEW'
+    return report
+
+
+def prepare_local_review(db, system, language='zh', actor_id=None):
+    """Prepare deterministic review in the command transaction, without model jobs."""
+    require_state(system, 'RESULT_REVIEW', 'NEGOTIATING')
+    if language not in ('zh', 'en'):
+        raise DomainError('INVALID_FIELDS')
+    round_ = db.get(SupplierRound, system.round_id) if system.round_id else None
+    if not round_ or not round_.submitted_id:
+        raise DomainError('STATE_CONFLICT', 409)
+    report = db.get(Report, system.report_id) if system.report_id else None
+    if report:
+        if report.submission_id != round_.submitted_id:
+            raise DomainError('VERSION_CONFLICT', 409)
+        return report
+    source = job_input(db, system, 'impact_analysis')
+    from .ai import local_impact
+    report = publish_impact_report(db, system, source, local_impact(source, language), 'local')
+    db.add(Audit(system_id=system.id, actor_id=actor_id, action='impact_analysis.completed', detail={
+        'mode': 'local', 'report_id': report.id, 'submission_id': round_.submitted_id,
+        'source_hash': digest(source), 'automatic': True}))
+    return report
 
 
 def save_submission(db, system, round_, user, payload):
@@ -479,10 +506,32 @@ def save_submission(db, system, round_, user, payload):
     round_.status, round_.submitted_id = "submitted", submission.id
     round_.draft = validated
     round_.version += 1
-    # Publication only records commitments. The customer explicitly starts any
-    # subsequent rule/model review; supplier payloads cannot trigger model work.
+    # Deterministic preparation is part of publication; payload mode cannot start AI.
     system.status, system.report_id = "RESULT_REVIEW", None
+    prepare_local_review(db, system, payload.get('language', 'zh'), actor_id=user.id)
+    prepare_remediation_agreement(db, system, actor_id=user.id)
     return submission
+
+
+def prepare_remediation_agreement(db, system, actor_id=None):
+    """Finish a scoped owner-requested correction without another acceptance step."""
+    from .negotiation import accepted, scope
+    if system.status != 'RESULT_REVIEW' or system.baseline_id:
+        return False
+    round_ = db.get(SupplierRound, system.round_id)
+    if not round_ or not round_.submitted_id or not accepted(round_):
+        return False
+    prd = db.get(Prd, round_.prd_id)
+    submission = db.get(Submission, round_.submitted_id)
+    current_scope = scope(round_, prd)
+    if not current_scope or any(submission.data.get(rid, {}).get('implementation_status') != 'yes'
+                                for rid in current_scope):
+        return False
+    freeze_baseline(db, system)
+    db.add(Audit(system_id=system.id, actor_id=actor_id, action='baseline.frozen', detail={
+        'baseline_id': system.baseline_id, 'submission_id': submission.id,
+        'automatic': True, 'reason': 'remediation_commitments_complete'}))
+    return True
 
 
 def review_report(db, system, payload, actor_id=None):
@@ -496,14 +545,25 @@ def review_report(db, system, payload, actor_id=None):
         raise DomainError("VERSION_CONFLICT", 409)
     if payload.get('report_id', report.id) != report.id:
         raise DomainError('VERSION_CONFLICT', 409)
-    decisions = payload.get("decisions", {})
+    decisions = copy.deepcopy(payload.get("decisions", {}))
     _, carried_decisions = carried_findings(round_)
     expected = {finding["id"] for finding in report.data["findings"]}
-    if not isinstance(decisions, dict) or set(decisions) not in (expected, expected - set(carried_decisions)):
+    from .supplier_review import commitment_decisions
+    commitments = commitment_decisions(db, round_, report)
+    required = expected - set(carried_decisions) - set(commitments)
+    if not isinstance(decisions, dict) or not required <= set(decisions) or not set(decisions) <= expected:
         raise DomainError("REVIEW_INCOMPLETE")
     if any(decisions[key] != value for key, value in carried_decisions.items() if key in decisions):
         raise DomainError('ACCEPTED_REQUIREMENT_LOCKED', 409)
-    decisions = {**copy.deepcopy(decisions), **carried_decisions}
+    # Older explicit owner decisions retain their authored reasons. New clients only
+    # submit exceptions; the server derives commitments from the immutable submission.
+    commitments.update({key: copy.deepcopy(value) for key, value in report.decisions.items()
+                        if key in commitments and value.get('decision') in ('accept', 'changes')
+                        and isinstance(value.get('reason'), str) and value['reason'].strip()})
+    for key, value in decisions.items():
+        if isinstance(value, dict) and value != commitments.get(key):
+            value.pop('decision_source', None)
+    decisions = {**commitments, **decisions, **carried_decisions}
     for item in decisions.values():
         if not isinstance(item, dict) or item.get("decision") not in ("accept", "changes") or not isinstance(item.get('reason'), str) or not item['reason'].strip():
             raise DomainError("REVIEW_INCOMPLETE")
@@ -516,6 +576,8 @@ def review_report(db, system, payload, actor_id=None):
         if finding['id'] in carried_decisions:
             continue
         decision.pop('residual_severity', None)
+        if decision.get('decision_source') == 'supplier_commitment':
+            continue
         if decision['decision'] != 'accept':
             continue
         source_exception = (finding['requirement_id'] in high
@@ -564,6 +626,13 @@ def freeze_baseline(db, system):
     report = db.get(Report, system.report_id)
     round_ = db.get(SupplierRound, system.round_id)
     prd = db.get(Prd, system.prd_id)
+    if report and not report.reviewed and report.submission_id == round_.submitted_id:
+        from .negotiation import carried_findings
+        from .supplier_review import commitment_decisions
+        _, carried = carried_findings(round_)
+        resolved = set(commitment_decisions(db, round_, report)) | set(carried)
+        if {f['id'] for f in report.data['findings']} <= resolved:
+            review_report(db, system, {'decisions': {}})
     if (not report or not report.reviewed or report.submission_id != round_.submitted_id or not prd.approved
             or {f['requirement_id'] for f in report.data['findings']} != {r['id'] for r in prd.data['requirements']}
             or any(report.decisions.get(f['id'], {}).get('decision') != 'accept'

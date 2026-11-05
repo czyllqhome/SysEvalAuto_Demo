@@ -16,6 +16,19 @@ def source_risk(control):
     return risk if risk in ('high', 'medium', 'low') else 'unknown'
 
 
+def commitment_decisions(db, round_, report):
+    """Carry submitted deliverable commitments without inventing owner risk acceptance."""
+    submission = db.get(Submission, round_.submitted_id) if round_.submitted_id else None
+    if not submission or submission.round_id != round_.id or report.submission_id != submission.id:
+        return {}
+    prd = db.get(Prd, round_.prd_id)
+    reason = ('供应商已确认可完成，计入开发承诺；实施证据在交付验收时核验。' if prd.language == 'zh' else
+              'The supplier confirmed delivery. This commitment is included in scope; implementation evidence is verified at delivery acceptance.')
+    return {f['id']: {'decision': 'accept', 'reason': reason, 'decision_source': 'supplier_commitment'}
+            for f in report.data['findings']
+            if submission.data.get(f['requirement_id'], {}).get('implementation_status') == 'yes'}
+
+
 def summary(db, round_, report=None):
     if not round_ or not round_.submitted_id:
         return None
@@ -52,7 +65,8 @@ def summary(db, round_, report=None):
         findings = ([f for f in report.data['findings'] if f['requirement_id'] == requirement['id']]
                     if report and report.submission_id == submission.id else [])
         owner_accepted = bool(report and report.reviewed and findings and all(
-            report.decisions.get(f['id'], {}).get('decision') == 'accept' for f in findings))
+            report.decisions.get(f['id'], {}).get('decision') == 'accept'
+            and report.decisions[f['id']].get('decision_source') != 'supplier_commitment' for f in findings))
         residual = 'medium' if owner_accepted and any(
             report.decisions[f['id']].get('residual_severity') == 'medium' for f in findings) else None
         items.append({'requirement_id': requirement['id'], 'title': requirement['title'],

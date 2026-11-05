@@ -10,6 +10,7 @@ def ready(owner):
     app, client, vendor, sid = invite_supplier(owner)
     detail = current(vendor, sid)
     answers = {r['id']: {'implementation_status': 'yes'} for r in detail['prd']['data']['requirements']}
+    answers[next(iter(answers))] = {'implementation_status': 'partial', 'limitations': 'Review the remaining delivery scope'}
     command(vendor, sid, 'supplier-submit', {'answers': answers, 'round_version': detail['round']['version']})
     command(client, sid, 'jobs', {'kind': 'impact_analysis', 'mode': 'local', 'language': 'en'})
     assert asyncio.run(run_once(app.state.sessions))

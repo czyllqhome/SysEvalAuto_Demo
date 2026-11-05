@@ -6,7 +6,7 @@ import { Button, Notice } from './components'
 import { useLocale } from './i18n'
 import { DeliveryBadge } from './DeliveryShared'
 import { DeliveryAttachments, SubmissionEvidence } from './DeliveryEvidence'
-import { deliveryTitle, evidenceReadiness, isOverdue, removeDraftAttachment, type Attachment, type DeliveryBatch, type DeliveryItem, type Draft } from './deliveryModel'
+import { deliveryToday, deliveryTitle, evidenceReadiness, isOverdue, removeDraftAttachment, type Attachment, type DeliveryBatch, type DeliveryItem, type Draft } from './deliveryModel'
 
 export default function DeliveryItemPanel({ batch, item, hidden, initiallyOpen, acceptResult, dirtyChanged }: {
   batch: DeliveryBatch; item: DeliveryItem; hidden: boolean; initiallyOpen: boolean
@@ -18,6 +18,9 @@ export default function DeliveryItemPanel({ batch, item, hidden, initiallyOpen, 
   const [decision, setDecision] = useState('NEEDS_MORE_EVIDENCE'), [reason, setReason] = useState(''), [checks, setChecks] = useState<string[]>([]), [reviewSource, setReviewSource] = useState('')
   const [reopenReason, setReopenReason] = useState('')
   const version = useRef(item.version), locked = useRef(false)
+  const beforeAuditFill = useRef<{ draft: Draft; dirty: boolean } | null>(null)
+  const [auditFilled, setAuditFilled] = useState(false)
+  const auditItem = ['安全审计', 'security audit'].includes((item.snapshot.requirement?.title ?? '').trim().toLowerCase())
   const latest = item.submissions.at(-1)
   const editable = batch.status === 'ACTIVE' && batch.allowed_actions.includes('upload') && ['OPEN', 'CHANGES_REQUESTED'].includes(item.status)
   const reviewable = batch.status !== 'SUPERSEDED' && batch.allowed_actions.includes('review')
@@ -46,6 +49,22 @@ export default function DeliveryItemPanel({ batch, item, hidden, initiallyOpen, 
     await acceptResult(result)
     return saved.version
   }
+  async function fillAudit() {
+    if (auditFilled && beforeAuditFill.current) {
+      setDraft(beforeAuditFill.current.draft); setDirty(beforeAuditFill.current.dirty); setAuditFilled(false); return
+    }
+    await run(async () => {
+      const preview = await api<{ filename: string; image_base64: string; draft: Draft }>(`/delivery-items/${item.id}/audit-evidence-preview?language=${locale}`)
+      const file = new File([Uint8Array.from(atob(preview.image_base64), c => c.charCodeAt(0))], preview.filename, { type: 'image/png' })
+      const result = await uploadEvidence<DeliveryBatch & { attachment: Attachment }>(item.id, file, { ...preview.draft, filename: file.name, version: version.current })
+      version.current = result.items.find(i => i.id === item.id)!.version
+      beforeAuditFill.current = { draft: structuredClone(draft), dirty }
+      const ids = [...(draft.attachment_ids ?? []), result.attachment.id]
+      change({ ...preview.draft, attachment_ids: ids, criteria_evidence_map: item.criteria.length === 1 ? { ...draft.criteria_evidence_map, [item.criteria[0].id]: [result.attachment.id] } : draft.criteria_evidence_map })
+      await acceptResult(result); setAuditFilled(true)
+      setSuccess(t('已填入真实日志摘录及说明，请核对后保存草稿。', 'Actual audit excerpt and description filled. Review before saving the draft.'))
+    })
+  }
   const code = item.source_id
   return <article hidden={hidden} className={`delivery-item state-${item.status.toLowerCase()}${open ? ' expanded' : ''}`} aria-labelledby={`delivery-title-${item.id}`}>
     <header className="delivery-item-header"><button className="delivery-item-toggle" aria-expanded={open} aria-controls={`delivery-content-${item.id}`} onClick={() => setOpen(!open)}><div><div className="delivery-card-tags"><code>{code}</code><DeliveryBadge status={item.status} />{item.snapshot.finding.severity && <span className={`delivery-risk risk-${item.snapshot.finding.severity}`}>{t('原评估风险', 'Original risk')}: {({ high: t('高', 'High'), critical: t('严重', 'Critical'), medium: t('中', 'Medium'), low: t('低', 'Low'), unknown: t('未知', 'Unknown') }[item.snapshot.finding.severity] ?? item.snapshot.finding.severity)}</span>}{changed && <span className="delivery-unsaved">{t('未保存', 'Unsaved')}</span>}</div><h3 id={`delivery-title-${item.id}`}>{deliveryTitle(item)}</h3></div><span className="delivery-expand-label">{open ? t('收起', 'Collapse') : t('展开处理', 'Open item')}{open ? <ChevronUp size={17} /> : <ChevronDown size={17} />}</span></button><div className="delivery-item-meta"><span><UserRound size={14} />{t('负责人', 'Owner')}: {commitment?.owner_name || t('未约定', 'Not specified')}</span><span className={overdue ? 'delivery-overdue' : ''}><CalendarDays size={14} />{t('承诺完成', 'Committed finish')}: {commitment?.estimated_finish_date || t('未约定', 'Not specified')}{overdue && ` · ${t('已超期', 'Overdue')}`}</span><span><Clock3 size={14} />{t('提交轮次', 'Submission rounds')}: {item.submissions.length}</span></div></header>
@@ -54,7 +73,7 @@ export default function DeliveryItemPanel({ batch, item, hidden, initiallyOpen, 
       {item.status === 'CHANGES_REQUESTED' && <div className="delivery-return-note"><CircleAlert size={18} /><div><strong>{t('本轮需补充', 'Requested changes')}</strong><p className="preserve-lines">{item.reopen_feedback?.reason || (latest?.review && latest.review.decision !== 'PASS' ? latest.review.reason : t('此项已重新打开，请补充最新验证材料；整改任务请同时核对客户复测记录。', 'This item was reopened. Supply current evidence; for remediation, also consult the customer retest record.'))}</p></div></div>}
       <div className={`delivery-item-grid${canReview ? ' with-review' : ''}`}><div className="delivery-item-main">
         <section className="delivery-requirement"><h4>{t('开发要求与验收条件', 'Requirement & acceptance criteria')}</h4>{item.snapshot.requirement?.description && <p className="preserve-lines">{item.snapshot.requirement.description}</p>}<ol className="delivery-criteria">{item.criteria.map(c => <li key={c.id}><code>{c.id}</code><span>{c.text}</span></li>)}</ol>{commitment && <details><summary>{t('查看双方确认的开发承诺', 'View agreed development commitment')}</summary><div className="delivery-commitment"><strong>{({ yes: t('承诺可完成', 'Committed in full'), partial: t('承诺部分完成', 'Partially committed'), no: t('无法完成', 'Unavailable'), needs_clarification: t('待澄清', 'Clarification needed') }[commitment.implementation_status] ?? commitment.implementation_status)}</strong>{commitment.implementation_plan && <p className="preserve-lines">{commitment.implementation_plan}</p>}{commitment.limitations && <p className="preserve-lines">{t('限制', 'Limitations')}: {commitment.limitations}</p>}{commitment.alternative && <p className="preserve-lines">{t('补偿措施', 'Compensating measures')}: {commitment.alternative}</p>}{commitment.estimated_start_date && <p>{t('承诺开始', 'Committed start')}: {commitment.estimated_start_date}</p>}{commitment.duration_workdays != null && <p>{t('预计工作日', 'Estimated workdays')}: {commitment.duration_workdays}</p>}</div></details>}</section>
-        {editable && <fieldset className="delivery-draft" disabled={busy}><legend><Upload size={17} />{t('供应商证据草稿', 'Supplier evidence draft')}</legend><h4><span>1</span>{t('填写完成情况', 'Describe the implementation')}</h4><label>{t('完成与证据说明', 'Completion and evidence description')}<textarea rows={3} value={draft.description ?? ''} maxLength={8000} placeholder={t('说明已实现的内容、测试结果与证据对应关系…', 'Describe implementation, test results and supporting evidence…')} onChange={e => change({ description: e.target.value })} /></label><div className="delivery-draft-fields">{(['environment', 'system_version', 'collected_on'] as const).map((key, index) => <label key={key}>{[t('环境', 'Environment'), t('系统版本', 'System version'), t('采集日期', 'Collection date')][index]}<input type={key === 'collected_on' ? 'date' : 'text'} value={draft[key] ?? ''} max={key === 'collected_on' ? new Date().toISOString().slice(0, 10) : undefined} maxLength={200} placeholder={index === 0 ? t('例如：UAT', 'e.g. UAT') : index === 1 ? 'v1.0.0' : undefined} onChange={e => change({ [key]: e.target.value })} /></label>)}</div>
+        {editable && <fieldset className="delivery-draft" disabled={busy}><legend><Upload size={17} />{t('供应商证据草稿', 'Supplier evidence draft')}</legend>{auditItem && <Button variant="secondary" onClick={() => void fillAudit()}>{auditFilled ? t('撤销填入', 'Undo fill') : t('一键填入 Demo', 'Fill demo')}</Button>}<h4><span>1</span>{t('填写完成情况', 'Describe the implementation')}</h4><label>{t('完成与证据说明', 'Completion and evidence description')}<textarea rows={3} value={draft.description ?? ''} maxLength={8000} placeholder={t('说明已实现的内容、测试结果与证据对应关系…', 'Describe implementation, test results and supporting evidence…')} onChange={e => change({ description: e.target.value })} /></label><div className="delivery-draft-fields">{(['environment', 'system_version', 'collected_on'] as const).map((key, index) => <label key={key}>{[t('环境', 'Environment'), t('系统版本', 'System version'), t('采集日期', 'Collection date')][index]}<input type={key === 'collected_on' ? 'date' : 'text'} value={draft[key] ?? ''} max={key === 'collected_on' ? deliveryToday() : undefined} maxLength={200} placeholder={index === 0 ? t('例如：UAT', 'e.g. UAT') : index === 1 ? 'v1.0.0' : undefined} onChange={e => change({ [key]: e.target.value })} /></label>)}</div>
           <h4><span>2</span>{t('上传并选择本轮材料', 'Upload and select evidence')}</h4><label className={`delivery-upload${!ready.metadata ? ' unavailable' : ''}`}><Upload size={20} /><span>{t('上传截图、代码或报告（每个最多 20 MiB）', 'Upload screenshots, code or reports (20 MiB each)')}</span><input type="file" disabled={!ready.metadata} accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.xlsx,.txt,.csv,.md,.py,.js,.ts,.tsx,.jsx,.java,.cs,.go,.rs,.sql,.json,.yaml,.yml,.sh,.ps1,.c,.cpp,.h,.diff,.log" onChange={e => {
             const file = e.target.files?.[0]; e.target.value = ''
             if (file) void run(async () => {

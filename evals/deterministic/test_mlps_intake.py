@@ -444,6 +444,22 @@ def test_grading_demo_retains_the_requested_assessment_snapshot_and_source_hash(
     assert template['department_contacts']['零售运营']['name'] == 'Alice'
 
 
+def test_impact_demo_retains_both_authored_judgments_and_separate_provenance():
+    from app.domain import digest
+    from app.mlps_intake import DEMO_TEMPLATE
+    source = DEMO_TEMPLATE['impact_source']
+    captured = {part: {key: DEMO_TEMPLATE['template'][part][key] for key in source['fields']}
+                for part in ('answers', 'notes')}
+    assert source['question_ids'] == ['G13', 'G14']
+    assert source['source_system_id'] == '3e1a517d-37fe-42c8-a2b4-932b1d60052a'
+    assert source['source_hash'] == digest(captured)
+    for dimension in ('info', 'service'):
+        assert captured['answers'][f'{dimension}_rights_severity'] == 1
+        assert captured['answers'][f'{dimension}_public_severity'] == 0
+        assert captured['answers'][f'{dimension}_national_severity'] == 0
+        assert captured['notes'][f'{dimension}_rights_severity'] == '系统不涉及核心业务流程，主要作为辅助用途。不涉及个人敏感信息，不涉及重要信息，不涉及核心信息'
+
+
 def test_information_demo_pins_all_thirty_answers_contacts_and_reusable_topology():
     import hashlib
     from app.domain import digest

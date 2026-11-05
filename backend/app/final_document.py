@@ -44,7 +44,10 @@ def render(db, baseline):
             if f.get('contextual_assessment'):
                 lines += ['```json', json.dumps(f['contextual_assessment'], ensure_ascii=False, indent=2), '```']
             decision = p['decisions'].get(f['id'], {})
-            lines.append(f"{label('客户决定', 'Customer decision')}: {decision.get('decision', '')} · {decision.get('reason', '')}")
+            if decision.get('decision_source') == 'supplier_commitment':
+                lines.append(f"{label('开发承诺：供应商已确认开发', 'Development commitment: Supplier confirmed delivery')} · {decision.get('reason', '')}")
+            else:
+                lines.append(f"{label('客户决定', 'Customer decision')}: {decision.get('decision', '')} · {decision.get('reason', '')}")
             if decision.get('residual_severity'):
                 lines.append(label('负责人接受后的风险等级：中风险；保留原始来源等级及报告结论。',
                                    'Risk after owner acceptance: Medium; original source ratings and findings are retained.'))

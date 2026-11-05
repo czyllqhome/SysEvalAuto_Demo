@@ -50,13 +50,11 @@ def test_simple_responses_submit_for_review_with_pinned_domain_labels(owner):
                        'answers': answers, 'mode': 'local', 'language': 'en'}).json()
     assert response['round']['status'] == 'submitted'
     assert response['system']['status'] == 'RESULT_REVIEW'
-    assert response['report'] is None
+    assert response['report']['mode'] == 'local'
     assert response['supplier_review']['counts']['yes'] == len(requirements) - 3
     assert response['baseline'] is None
     assert response['round']['draft'][requirements[-1]['id']]['duration_workdays'] is None
     assert not asyncio.run(run_once(app.state.sessions))
-    command(customer, sid, 'jobs', {'kind': 'impact_analysis', 'mode': 'local', 'language': 'en'})
-    assert asyncio.run(run_once(app.state.sessions))
     reviewed = current(customer, sid)
     assert reviewed['report'], reviewed.get('job')
     assert reviewed['report']['reviewed'] is False

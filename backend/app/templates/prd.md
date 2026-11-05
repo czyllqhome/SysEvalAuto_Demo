@@ -1,4 +1,4 @@
-<!-- syseval:prd-layout-v3 -->
+<!-- syseval:prd-layout-v4 -->
 # {{document_title}}
 
 {{document_status}}
@@ -40,31 +40,3 @@
 ## 8 服务水平 / Service levels
 
 {{acceptance_questions}}
-
-## 9 交付与待确认事项 / Delivery and open questions
-
-{{release_questions}}
-
-{{constraints}}
-
-### 假设与待确认事项 / Assumptions and open questions
-
-{{questions}}
-
-<!-- syseval:prd-appendix -->
-
-## 附录 A 验收清单 / Appendix A · Acceptance checklist
-
-{{acceptance_criteria}}
-
-## 附录 B 安全需求实施说明 / Appendix B · Security implementation requirements
-
-{{security_details}}
-
-## 附录 C 来源与版本 / Appendix C · Sources and version
-
-{{traceability}}
-
-{{document_info}}
-
-{{review}}

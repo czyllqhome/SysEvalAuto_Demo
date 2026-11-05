@@ -73,9 +73,8 @@ def submit_supplier(owner):
     response = command(vendor, sid, "supplier-submit", {"round_version": result["round"]["version"],
                        "answers": answers, "mode": "local", "language": "en"}, key="submit-once")
     assert response.json()["system"]["status"] == "RESULT_REVIEW"
-    assert response.json()["report"] is None
-    command(client, sid, 'jobs', {'kind': 'impact_analysis', 'mode': 'local', 'language': 'en'})
-    assert asyncio.run(run_once(app.state.sessions))
+    assert response.json()["report"]['mode'] == 'local'
+    assert not response.json()["report"]['reviewed']
     return app, client, vendor, sid
 
 

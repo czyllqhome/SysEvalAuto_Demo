@@ -1,3 +1,15 @@
+> 2026-11-06：负责人已下发的逐项整改，在本轮全部确认可完成后自动冻结完整承诺并进入双方确认；客户与供应商仍须独立确认相同 hash。旧复核/供应商链接自动转向已有待确认基线。Scoped remediation completion automatically prepares and opens joint confirmation; independent same-hash signatures remain required.
+
+> 2026-11-06：供应商已确认可完成的条目直接计入开发承诺，负责人只处理部分完成、无法完成和待澄清项；全部可完成时可直接冻结并收集双方确认。汇总改为四个可点击的状态统计块。Confirmed commitments and exception-only owner review: [docs/supplier-prd-delivery.md](docs/supplier-prd-delivery.md).
+>
+> 2026-11-06：供应商提交后直接生成本地规则审查，负责人进入“需关注项”处理，无需选择启动方式；旧记录自动补齐缺少的报告，逐项决定及独立双签保留。Direct local owner review: [docs/supplier-prd-delivery.md](docs/supplier-prd-delivery.md).
+>
+> 2026-11-06：供应商高风险“一键 Demo”已采用用户最新的三条答复原文；远程管理项工期留空，其余两项保留 5/3 天，填入、保存和撤销行为保留。Updated supplier Demo: [docs/supplier-prd-delivery.md](docs/supplier-prd-delivery.md).
+>
+> 2026-11-06：默认 PRD 改为八章，在服务水平后结束，移除交付与待确认事项、附录及页尾重复编辑区；需求、验收与来源记录保留，已有草稿通过新修订更新。Eight-chapter PRD: [docs/prd-template-review.md](docs/prd-template-review.md).
+>
+> 2026-11-06：安全控制匹配页精简说明，点击豁免数量查看原因；人工排除条目可“撤回排除”重新纳入，原理由保留于审计。中英文、权限及版本检查保留。Control restoration: [docs/implementation.md](docs/implementation.md#2026-11-06-control-matching-and-manual-exclusion-withdrawal).
+>
 > 2026-11-06：信息收集“一键 Demo”更新为当前评估保存版本 9 的 30 题答案、补充说明及部门联系人，包含可独立复制的网络拓扑图。定级 Demo 保留，旧模板已备份。Information Demo snapshot: [docs/mlps-intake.md](docs/mlps-intake.md).
 >
 > 2026-11-06：定级结果的内部规则卡片用完整问卷选项替换 1–5 级刻度条，高亮已选项，保留历史答案与计算结果。Read-only answer comparison: [docs/mlps-intake.md](docs/mlps-intake.md).

@@ -1,3 +1,9 @@
+> 2026-11-06：定级题按 G01–G14 顺序排列，G01–G06 与 G09–G12 分为两组桌面双列，G09–G12 位于 G08 之后；手机继续单列。G13、G14 的客体、损害程度及理由取自当前用户指定评估的已保存版本 2，单独记录 impact_source 与内容 hash，只更新两题关联字段，其他 Demo 内容与旧来源保留。切换语言不改写原文，填入仍可撤销且不自动确认等级。Grading order and the scoped G13/G14 Demo snapshot retain authored answers and independent provenance.
+
+> 2026-11-06：负责人已下发的逐项整改，在本轮全部确认可完成后自动冻结完整承诺并进入双方确认；客户与供应商仍须独立确认相同 hash。旧复核/供应商链接自动转向已有待确认基线。Scoped remediation completion automatically prepares and opens joint confirmation; independent same-hash signatures remain required.
+
+> 2026-11-06 承诺复核验收：已提交 yes 条目直接计入开发承诺，不要求负责人重复接受或填写理由；只审查部分、无法完成、待澄清等例外。服务端依据不可变提交补齐并标记 `supplier_commitment`，不伪造负责人风险接受或降低来源风险，保留原人工理由及锁定决定。全部可完成可直接冻结，仍需双方独立确认同一 hash。四个带标签的状态统计支持点击筛选及中英文。回归覆盖遗漏例外、伪造标记、可变草稿隔离、过期版本/报告、整改承接及双签。详见 [供应商协同契约](docs/supplier-prd-delivery.md)。
+>
 > 2026-11-06 信息 Demo 验收：保存当前评估版本 9 的 30 题、说明、联系人及网络拓扑素材，单独固定 information_source；原定级快照保留。示例不携带原附件 ID；信息阶段显式填入时复制为目标评估附件，再使用最新版本保存。复制失败保留原填写，撤销恢复原值；同组织权限、来源、修订与独立基线确认继续有效。旧模板备份，不修改原评估记录。
 >
 > 2026-11-06 定级结果选项对照：内部依据卡片用真实问卷选项替换 1–5 级刻度条，高亮已选项，完整展示其他选项；数据量两组独立、历史/数字答案保留、中英文同步。对照只读，已保存等级、原确认快照、来源与基线不改写。覆盖已确认结果无写入和移动端展示。
@@ -59,6 +65,26 @@
 > 2026-11-03 Demo: 项目机制和控制库写入入口已停用；使用直接评估、CN MLPS 来源库和 PRD v2。Current behavior: [更新说明 / Current contract](docs/direct-assessment-mlps.md).
 
 # System assessment and supplier collaboration: development specification
+
+## 2026-11-06: direct local owner review acceptance
+
+供应商提交时同步准备未审查的本地规则报告，直接进入负责人“需关注项”处理，移除开始本地/AI 审查的选择步骤。准备与不可变提交在同一事务内完成，失败整体回滚，不调用模型或消耗模型预算。旧记录缺少报告时，仅客户审查角色通过当前 version/round/submission 绑定的幂等命令自动补齐；供应商及只读角色不可准备，已有报告和决定不覆盖。
+
+负责人仍逐项处理高风险例外并填写责任理由，可批量审查已承诺可完成项；报告不自动产生负责人批准。完整来源/证据校验、整改轮次承接、审查完整性、历史快照和独立双方同 hash 确认继续有效。单项/完整 AI 只在后续显式请求时运行。验收覆盖无模型配置、预算耗尽、准备失败回滚、旧记录直接审查、权限/版本/来源边界以及完整整改和双签流程。
+
+English: Local findings are ready on submission, with automatic preparation for missing legacy reports and no initial mode choice. Findings do not substitute for owner decisions or independent confirmation. No migration or runtime reset.
+
+## 2026-11-06: eight-chapter PRD acceptance
+
+默认 PRD 保留八章，在服务水平后结束。移除交付与待确认事项、假设/问题清单、验收/实施/来源附录及网页页尾重复的逐项编辑区；页头“修改 PRD”继续提供需求与验收审查。Word 与 Markdown 必须反映同一保存稿。需求、验收、假设、问题与来源的结构化记录保留，业务/控制覆盖和网络拓扑不得遗漏。已有草稿显式应用模板形成未批准新修订，保留原稿/hash/来源和生成方式；已下发文档、历史基线及独立双方确认不改写。离线验收覆盖中英文、旧模板兼容、下载一致和原编辑/权限/版本门槛。
+
+English: The default PRD ends after chapter 8; the selected delivery/questions, appendices and duplicate footer editor are removed. Structured assessment records and source coverage remain; draft refresh preserves immutable history and requires renewed approval.
+
+## 2026-11-06: control matching withdrawal acceptance
+
+安全控制匹配页使用简短标题与一句功能说明，移除冗长统计介绍和侧栏 MLPS 说明。点击“豁免条目”数字直接展开或收起原因；不适用数字采用相同交互。原因表内仅人工排除项提供“撤回排除”，恢复纳入后同步更新统计。沿用 CONTROL_REVIEW、编辑/管理权限、组织隔离、当前 version 和幂等检查；请求中禁用重复操作，失败保留原决定和理由。原排除理由写入撤回审计，固定控制来源、其他决定、历史修订和独立双方同 hash 确认保留，无迁移或数据重置。
+
+English: Reason counts toggle their tables directly. Manual exclusions can be restored through the existing versioned selection command; audit retains the previous authored reason. Offline acceptance covers single/bulk restoration, response-driven counts, failed saves, idempotency, permission/stage/organization boundaries and bilingual source preservation.
 
 ## 2026-11-05: development tracking acceptance update
 

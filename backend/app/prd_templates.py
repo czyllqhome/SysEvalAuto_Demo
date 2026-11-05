@@ -15,12 +15,15 @@ SLOTS = ['name', 'document_info', 'summary', 'roles', 'scope', 'workflow', 'busi
          'questions', 'review', 'ai_scope', 'questionnaire_facts', 'acceptance_criteria', 'network_topology']
 GROUP_SLOTS = [f'{key}_questions' for key in ('scope', 'roles', 'workflow', 'functions', 'data', 'security', 'acceptance', 'release')]
 LAYOUT_V3 = '<!-- syseval:prd-layout-v3 -->'
+LAYOUT_V4 = '<!-- syseval:prd-layout-v4 -->'
+V4_INTERNAL_SLOTS = {'document_info', 'traceability', 'constraints', 'questions', 'review',
+                     'acceptance_criteria', 'security_details'}
 
 
 def snapshot(db, org_id):
     row = db.get(AISettings, org_id)
     template = (row.data.get('prd_template') if row and row.data.get('prd_template_generation') == 2 else
-                {'filename': 'System_Assessment_PRD_v3.md', 'content': DEFAULT.read_text(encoding='utf-8')})
+                {'filename': 'System_Assessment_PRD_v4.md', 'content': DEFAULT.read_text(encoding='utf-8')})
     return {'version': row.data.get('prd_template_version', 0) if row else 0, 'template': template, 'hash': digest(template)}
 
 
@@ -79,7 +82,8 @@ def recorded(db, prd):
 
 def render(data, source, language, pinned):
     zh = language == 'zh'
-    compact = LAYOUT_V3 in pinned['template']['content']
+    body_only = LAYOUT_V4 in pinned['template']['content']
+    compact = body_only or LAYOUT_V3 in pinned['template']['content']
     def t(a, b):
         return a if zh else b
     def cell(value):
@@ -302,14 +306,17 @@ def render(data, source, language, pinned):
             return '%%QUESTION_REGISTER%%'
         return slots.get(key) if key in slots else missing(key)
     text = re.sub(r'\{\{([^{}]+)\}\}', replace, text)
-    # Coverage cannot be removed by deleting layout slots.
+    # Keep requirement coverage in the document; v4 retains supporting records in structured data.
     for key in SLOTS:
+        if body_only and key in V4_INTERNAL_SLOTS:
+            continue
         if compact and not slots.get(key):
             continue
         if key not in used and key not in ('name', 'questions', 'summary', 'scope', 'workflow', 'data_and_integrations', 'network_topology') and not (
-                key == 'questionnaire_facts' and all(f'{group}_questions' in used for group in groups)):
+                key == 'questionnaire_facts' and all(f'{group}_questions' in used for group in groups
+                                                   if not body_only or group != 'release')):
             text += f'\n\n## {key}\n\n{slots[key]}'
-    if compact and 'security_details' not in used and slots['security_details']:
+    if compact and not body_only and 'security_details' not in used and slots['security_details']:
         text += '\n\n## ' + t('安全需求实施说明', 'Security implementation requirements') + '\n\n' + slots['security_details']
     if 'network_topology' not in used and slots['network_topology']:
         architecture = re.search(r'^## [^\n]*(?:系统开发架构|System development architecture)[^\n]*\n', text, re.MULTILINE | re.IGNORECASE)
@@ -325,6 +332,6 @@ def render(data, source, language, pinned):
         register = t('暂无已登记事项。', 'No items recorded.')
     if '%%QUESTION_REGISTER%%' in text:
         text = text.replace('%%QUESTION_REGISTER%%', register)
-    else:
+    elif not body_only:
         text += '\n\n## ' + t('假设与待确认项', 'Assumptions and questions') + '\n\n' + register
     return text + '\n'

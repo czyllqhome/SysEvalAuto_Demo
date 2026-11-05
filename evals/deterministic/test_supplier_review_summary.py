@@ -1,4 +1,4 @@
-"""Supplier publication never schedules AI; summaries preserve published evidence."""
+"""Supplier publication prepares local review without AI and preserves pinned evidence."""
 import asyncio
 import copy
 
@@ -13,7 +13,7 @@ from test_workflow import command, current, invite_supplier
 
 
 @pytest.mark.parametrize('configured', [False, True])
-def test_submit_only_publishes_and_returns_pinned_risk_summary(owner, monkeypatch, configured):
+def test_submit_prepares_local_review_and_returns_pinned_risk_summary(owner, monkeypatch, configured):
     app, customer, vendor, sid = invite_supplier(owner)
     monkeypatch.setenv('OPENROUTER_API_KEY', 'offline-test-key' if configured else '')
     monkeypatch.setenv('OPENROUTER_MODEL', 'offline-model' if configured else '')
@@ -41,7 +41,10 @@ def test_submit_only_publishes_and_returns_pinned_risk_summary(owner, monkeypatc
     submitted = command(vendor, sid, 'supplier-submit', {'round_version': detail['round']['version'],
                         'answers': answers, 'mode': 'openrouter'}, key='publish-summary').json()
     assert submitted['system']['status'] == 'RESULT_REVIEW'
-    assert submitted['report'] is None and submitted['baseline'] is None
+    assert submitted['report']['mode'] == 'local' and submitted['baseline'] is None
+    assert not submitted['report']['reviewed'] and submitted['report']['decisions'] == {}
+    assert len(submitted['report']['data']['findings']) == len(requirements)
+    assert {f['requirement_id'] for f in submitted['report']['data']['findings']} == {r['id'] for r in requirements}
     assert 'job_id' not in submitted
     assert not asyncio.run(run_once(app.state.sessions))
     with app.state.sessions() as db:

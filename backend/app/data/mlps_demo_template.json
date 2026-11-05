@@ -27,12 +27,6 @@
       "cross_border_data": "否",
       "safety_impact": "否",
       "external_dependency_impact": "否",
-      "info_rights_severity": 1,
-      "info_public_severity": 0,
-      "info_national_severity": 0,
-      "service_rights_severity": 1,
-      "service_public_severity": 0,
-      "service_national_severity": 0,
       "involves_transactions": "否",
       "interconnected_system_level": "1 级",
       "system_name": "户外运动与产品介绍AI客服",
@@ -86,7 +80,13 @@
       "physical_media": "否",
       "physical_media_transport": "否",
       "facility_management": "是",
-      "physical_visitors": "否"
+      "physical_visitors": "否",
+      "info_rights_severity": 1,
+      "info_public_severity": 0,
+      "info_national_severity": 0,
+      "service_rights_severity": 1,
+      "service_public_severity": 0,
+      "service_national_severity": 0
     },
     "notes": {
       "security_responsible_entity": "PwC Cyber ",
@@ -228,5 +228,25 @@
     },
     "source_content_hash": "97eb8fb0439ae66dc163e895322f8d3c19ac9dea4670e5b03ce449cfa4baacb7",
     "source_hash": "5d89909585a642b5e2a6a951d7d57568f93e29f3299cdef51e4e3b5cea7edf0d"
+  },
+  "impact_source": {
+    "source_org_id": "d7ebdad5-1939-4426-8031-92f973a55f02",
+    "source_system_id": "3e1a517d-37fe-42c8-a2b4-932b1d60052a",
+    "source_system_version": 2,
+    "source_revision": 1,
+    "captured_at": "2026-11-05T23:11:57.499376+00:00",
+    "question_ids": [
+      "G13",
+      "G14"
+    ],
+    "fields": [
+      "info_rights_severity",
+      "info_public_severity",
+      "info_national_severity",
+      "service_rights_severity",
+      "service_public_severity",
+      "service_national_severity"
+    ],
+    "source_hash": "faaedca4c56fe18c964d499bf587d3657d152308ea06020b5247b939161de815"
   }
 }

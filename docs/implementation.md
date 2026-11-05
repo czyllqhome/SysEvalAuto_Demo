@@ -1,3 +1,9 @@
+> 2026-11-06：定级题按 G01–G14 顺序排列，G01–G06 与 G09–G12 分为两组桌面双列，G09–G12 位于 G08 之后；手机继续单列。G13、G14 的客体、损害程度及理由取自当前用户指定评估的已保存版本 2，单独记录 impact_source 与内容 hash，只更新两题关联字段，其他 Demo 内容与旧来源保留。切换语言不改写原文，填入仍可撤销且不自动确认等级。Grading order and the scoped G13/G14 Demo snapshot retain authored answers and independent provenance.
+
+> 2026-11-06：负责人已下发的逐项整改，在本轮全部确认可完成后自动冻结完整承诺并进入双方确认；客户与供应商仍须独立确认相同 hash。旧复核/供应商链接自动转向已有待确认基线。Scoped remediation completion automatically prepares and opens joint confirmation; independent same-hash signatures remain required.
+
+> 2026-11-06：供应商确认可完成的条目无需负责人再次接受，客户保存例外决定时由服务端依据不可变提交补齐 `supplier_commitment` 来源记录；全量可完成可直接冻结，保留来源风险、实施验收和独立双签。四个可筛选状态统计替代斜杠数字。Current commitment-only disposition and owner exception review: [supplier-prd-delivery.md](supplier-prd-delivery.md).
+>
 > 2026-11-05：统一全站字体、字号、控件与自适应内容宽度，减少宽屏留白。说明 / Unified interface: [interface-design.md](interface-design.md).
 
 > 2026-11-05：`AdminDashboard.tsx` / `admin_dashboard.py` 新增管理员只读汇总，入口 `/dashboard`，API `/api/v1/admin/dashboard`。管理员权限、组织隔离、当前 revision/source hash、独立同 hash 双签和风险接受/关闭区分保持有效。见 [实现口径与测试](admin-dashboard.md)。
@@ -52,6 +58,38 @@
 > 2026-11-03 Demo: 项目机制和控制库写入入口已停用；使用直接评估、CN MLPS 来源库和 PRD v2。Current behavior: [更新说明 / Current contract](direct-assessment-mlps.md).
 
 # Implementation map
+
+## 2026-11-06: immediate local-rule owner review
+
+`service.save_submission` now calls `prepare_local_review` in the same transaction after freezing answers. `publish_impact_report` is shared with asynchronous report publication, retaining report schema/evidence validation and carried accepted findings/decisions. The synchronous path calls only `ai.local_impact`, creates an unreviewed `mode=local` report, and leaves the system in RESULT_REVIEW without an AI job, model configuration lookup or token-budget dependency. Completion audit pins submission/report IDs and the source hash; human decisions remain empty except immutable carried decisions.
+
+POST `/systems/{id}/local-review` provides versioned preparation for older submitted rounds with no report. It requires customer review/manage authority, current round/submission IDs and the standard idempotency/version checks. Existing current reports are reused. Its request action is `impact_analysis.requested`, retaining reviewer authority rather than recording an editing contribution.
+
+`ImpactDecisions` automatically invokes this command once per missing submission for eligible customer viewers. The former mode-selection empty state is replaced by a preparation status and a local-only retry on failure. Normal submissions already arrive with a report. `SupplierReviewSummary` immediately exposes owner decisions in its default Needs attention filter; suppliers/read-only customers never prepare or edit review. Existing explicit AI assistance, complete-decision checks, High-risk acknowledgement and independent same-hash confirmations remain intact.
+
+Offline regressions cover synchronous results with configured/unconfigured AI and exhausted model budget, immutable sources, atomic rollback, legacy preparation/idempotency/stale references, role and organization boundaries, scoped remediation carry-forward and bilingual direct review. No migration or runtime reset.
+
+## 2026-11-06: latest authored supplier Demo exceptions
+
+`supplierDemo.ts` now matches the three High-risk exceptions in the requested assessment's immutable round-1 submission, round version 13. Chinese limitations and alternatives use the authored text verbatim, without the former Demo prefixes. Remote management keeps `duration_workdays=null`; its saved plan's 20-day assessment wording is retained separately. Malware protection and external access keep clarification status and 5/3-day estimates. English examples reflect the same meanings and null-duration policy. Other Demo defaults, clause-based matching and fill/undo/autosave behavior are unchanged.
+
+The old source file and capture provenance/hash are preserved under `.syseval/`. `evals/fixtures/supplier-demo-latest.json` contains only the three authorized clauses and answers, with no runtime or organization IDs. Frontend regressions compare complete Chinese answers against this fixture, check English status/duration and multiline matching, then fill/save/undo all three through `SupplierPanel`. The current submission, source snapshots, reports and independent baseline confirmation gates are not modified. No backend API or migration change.
+
+## 2026-11-06: eight-chapter PRD without the delivery footer
+
+The default `prd.md` uses `prd-layout-v4` and ends at chapter 8, Service levels. Chapter 9 delivery/open questions and acceptance/implementation/provenance appendices are removed. `prd_templates.render` retains compact control grouping while suppressing automatic restoration of these unused supporting slots for v4. Business/control coverage, questionnaire sections and topology remain required. Legacy v3/custom snapshots retain their rendering behavior, including appendices.
+
+`PrdPanel` removes the duplicate “Review and edit individual requirements” footer and its obsolete single-item modal/filter state. The header's searchable Edit PRD dialog still reviews/edits structured requirements and acceptance criteria; normal approval/version/source gates remain. Template-editor guidance reflects the eight-chapter default.
+
+Existing documents change only through the versioned template-refresh command, which creates an unapproved successor with the same requirement JSON, language and generation mode. Historical Markdown, hashes, templates, supplier rounds and baselines remain intact. The new saved Markdown also supplies Word downloads. Offline coverage includes v3/v4 source grouping and history, bilingual footer removal, structured-record retention, matching Word headings and preserved edit/approval behavior. No database migration or reset.
+
+## 2026-11-06: control matching and manual exclusion withdrawal
+
+`ControlsPanel` uses the heading “安全控制匹配 / Security control matching” with one sentence describing matching and scope adjustments. The former detailed statistics introduction and MLPS sidebar paragraph are removed. Exemption and not-applicable counts are accessible toggle buttons that open their respective source/reason tables; no separate reason button is shown beside the labels.
+
+Manual exclusions expose “撤回排除 / Undo exclusion” in the reason table. The action reuses POST `/systems/{id}/controls` with `included=true`, an empty current reason and the latest cached system version. Only edit/manage callers in CONTROL_REVIEW can use it; pending requests disable withdrawal. Counts and rows update from the saved response. Failures preserve the original exclusion and show the command error. Rule-based exclusions retain their existing classification and actions.
+
+When an existing reasoned exclusion is included again, the same transaction appends `control.exclusion_withdrawn`, preserving control ID, revision, actor and the previous authored reason. Pinned source snapshots, other selections, historical revisions and independent baseline confirmations remain intact. No migration or runtime-data reset. Offline frontend and deterministic API regressions cover successful/single/bulk restoration, audit/idempotency, stale versions, organization/read-only/stage boundaries, updated counts and bilingual source preservation.
 
 2026-11-06 copy update: the information phase of `MLPSIntake` shows a “系统信息收集 / System information collection” heading and one bilingual sentence describing its five information topics. The grading-oriented eyebrow and former instructions are removed. Information chapter headings omit the generic navigation/save hint. `NarrativeRefinement` omits the small helper text beside its button; suggestion review, acceptance/undo and authored answers retain their existing behavior.
 

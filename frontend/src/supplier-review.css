@@ -5,11 +5,24 @@
 .commitment-overview-heading h3 { margin: 0; font-size: 18px; }
 .commitment-overview-heading > span { font-size: 12px; color: var(--muted); }
 .commitment-disclaimer, .commitment-list-hint { color: var(--muted); font-size: 13px; line-height: 1.7; }
-.commitment-metrics { display: grid; grid-template-columns: 1.1fr 1.5fr 1fr 1fr; gap: 20px; margin: 24px 0; }
+.commitment-metrics { display: grid; grid-template-columns: 1.1fr 1.65fr 1fr 1fr; gap: 20px; margin: 24px 0; align-items: stretch; }
 .commitment-metrics > div, .commitment-metrics > button { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
 .commitment-metrics strong { font-size: 30px; line-height: 1.2; color: #213651; font-variant-numeric: tabular-nums; }
 .commitment-metrics span, .commitment-metrics small { color: var(--muted); font-size: 13px; }
-.commitment-metrics .commitment-distribution { font-size: 25px; overflow-wrap: anywhere; }
+.commitment-status-summary { width: 100%; }
+.commitment-status-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; }
+.commitment-status-heading > small { white-space: nowrap; }
+.commitment-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.commitment-status-stat { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 10px 12px; text-align: left; cursor: pointer; }
+.commitment-status-stat:hover, .commitment-status-stat[aria-pressed="true"] { border-color: #568bc8; background: #edf4fd; }
+.commitment-status-stat:focus-visible { outline: 2px solid #3478bd; outline-offset: 2px; }
+.commitment-status-stat > span { display: flex; align-items: center; gap: 6px; color: #52647a; font-size: 12px; }
+.commitment-status-stat i { width: 6px; height: 6px; border-radius: 50%; background: #737faa; flex: none; }
+.commitment-status-stat.status-yes i { background: #45896a; }
+.commitment-status-stat.status-partial i { background: #b38736; }
+.commitment-status-stat.status-no i { background: #bb574c; }
+.commitment-metrics .commitment-status-stat strong { display: flex; align-items: baseline; gap: 4px; font-size: 21px; }
+.commitment-metrics .commitment-status-stat strong small { font-size: 11px; font-weight: 400; }
 .commitment-progress progress { width: 100%; height: 7px; accent-color: #3678bd; border: 0; border-radius: 4px; }
 .commitment-progress progress::-webkit-progress-bar { border-radius: 4px; background: #edf1f7; }
 .commitment-progress progress::-webkit-progress-value { border-radius: 4px; background: #3678bd; }
@@ -17,6 +30,16 @@
 .commitment-risk-metric:hover { border-color: #85a7d4; }
 .commitment-risk-metric.high strong { color: #ab4b41; }
 .commitment-risk-metric.medium strong { color: #986a22; }
+@media (min-width: 1051px) {
+  .commitment-metrics { grid-template-rows: auto 1fr; row-gap: 8px; }
+  .commitment-metrics .commitment-progress { grid-row: 1 / 3; }
+  .commitment-metrics .commitment-status-summary { display: grid; grid-row: 1 / 3; grid-template-rows: subgrid; }
+  .commitment-status-summary > small { grid-row: 3; }
+  .commitment-metrics .commitment-risk-metric { grid-row: 2; padding: 10px 14px; gap: 4px; justify-content: space-between; }
+  .commitment-risk-metric.high { grid-column: 3; }
+  .commitment-risk-metric.medium { grid-column: 4; }
+  .commitment-risk-metric strong { font-size: 25px; }
+}
 .commitment-message { display: flex; gap: 14px; flex-wrap: wrap; padding: 12px 16px; border-radius: 7px; line-height: 1.6; font-size: 14px; }
 .commitment-message.attention { background: #fff5f2; border: 1px solid #f0cfc7; color: #944b3d; }
 .commitment-message.complete { background: #f0f8f5; border: 1px solid #c9e2d7; color: #356d56; }
@@ -54,10 +77,11 @@
 .commitment-review-heading h3 { font-size: 16px; margin: 0; }
 .commitment-review-heading > .muted { margin-left: auto; font-size: 12px; }
 .commitment-review-tools { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; }
-.commitment-review-tools .bulk-review { display: grid; grid-template-columns: auto minmax(170px, 1fr) auto; align-items: center; gap: 10px 16px; }
-.commitment-review-tools .bulk-review > .field-hint { grid-column: 1 / -1; grid-row: 2; margin: 0; }
-.commitment-review-tools .bulk-review .button, .commitment-review-tools .bulk-review input { font-size: 12px; min-height: 38px; }
-.commitment-review-tools .bulk-review input { margin: 0; }
+.commitment-review-guide { display: flex; align-items: flex-start; gap: 9px; flex: 1 1 400px; margin: 0; padding: 12px 14px; color: #426654; background: #f1f8f4; border: 1px solid #dceadf; border-radius: 6px; font-size: 13px; line-height: 1.7; }
+.commitment-review-guide svg { flex: none; margin-top: 2px; }
+.commitment-confirmed { color: #426654; font-size: 13px; }
+.commitment-confirmed > strong { display: flex; align-items: center; gap: 7px; }
+.commitment-confirmed p { color: var(--muted); }
 .commitment-reassess { flex: 0 1 230px; padding: 9px 12px; border: 1px solid #dce5f0; border-radius: 6px; background: #f8faff; font-size: 12px; line-height: 1.7; }
 .commitment-reassess summary { color: #376aa9; cursor: pointer; }
 .commitment-reassess .button { width: 100%; white-space: normal; }
@@ -90,7 +114,7 @@
 .commitment-review-start .empty h3 { font-size: 16px; margin: 0 0 10px; }
 .commitment-review-start .empty p { max-width: none; margin: 0 0 16px; }
 .commitment-review-start .empty .button { margin: 0 10px 8px 0; }
-@media (max-width: 1250px) { .commitment-review-tools { flex-direction: column; } .commitment-review-tools .bulk-review { width: 100%; flex-basis: auto; } .commitment-reassess { flex: none; max-width: 100%; } }
-@media (max-width: 650px) { .commitment-review-tools .bulk-review { grid-template-columns: 1fr; } .commitment-review-tools .bulk-review > .field-hint { grid-row: auto; } .commitment-review-heading > .muted { margin-left: 0; } }
+@media (max-width: 1250px) { .commitment-review-tools { flex-direction: column; } .commitment-review-guide { flex: none; width: 100%; } .commitment-reassess { flex: none; max-width: 100%; } }
+@media (max-width: 650px) { .commitment-review-heading > .muted { margin-left: 0; } }
 @media (max-width: 1050px) { .commitment-metrics { grid-template-columns: 1fr 1fr; } .commitment-domain table { min-width: 650px; } }
-@media (max-width: 600px) { .commitment-overview, .commitment-list { padding: 16px; } .commitment-search { grid-template-columns: 1fr; } .commitment-overview-heading { align-items: flex-start; flex-direction: column; } .commitment-metrics { gap: 18px 12px; } .commitment-metrics strong { font-size: 26px; } .commitment-metrics .commitment-distribution { font-size: 22px; } }
+@media (max-width: 600px) { .commitment-overview, .commitment-list { padding: 16px; } .commitment-search { grid-template-columns: 1fr; } .commitment-overview-heading { align-items: flex-start; flex-direction: column; } .commitment-metrics { gap: 18px 12px; } .commitment-metrics strong { font-size: 26px; } .commitment-metrics .commitment-progress { grid-column: 1 / -1; } .commitment-metrics .commitment-status-summary { grid-column: 1 / -1; grid-row: 2; } }

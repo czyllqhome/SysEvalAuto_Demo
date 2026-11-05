@@ -25,7 +25,8 @@ def review_decisions(detail, returned=None):
     return {f['id']: {'decision': 'changes' if f['requirement_id'] == returned else 'accept',
                        'reason': 'Use the designated secure tool' if f['requirement_id'] == returned else 'Owner accepts responsibility; verify evidence before release',
                        'owner_reviewed': True}
-            for f in detail['report']['data']['findings'] if f['requirement_id'] not in carried}
+            for f in detail['report']['data']['findings'] if f['requirement_id'] not in carried
+            and detail['round']['draft'][f['requirement_id']]['implementation_status'] != 'yes'}
 
 
 def test_targeted_rounds_preserve_accepted_items_until_independent_finalization(owner):
@@ -107,11 +108,18 @@ def test_targeted_rounds_preserve_accepted_items_until_independent_finalization(
         saved = command(supplier, sid, 'supplier-draft', {'answers': partial, 'round_version': detail['round']['version']}, method='put').json()
         assert saved['round']['draft'][targets[1]['id']] == old_submission[targets[1]['id']]
         submitted = command(supplier, sid, 'supplier-submit', {'answers': partial, 'round_version': saved['round']['version']}).json()
-        assert submitted['report'] is None and submitted['system']['status'] == 'RESULT_REVIEW'
+        assert submitted['report']['mode'] == 'local'
+        assert submitted['system']['status'] == ('FINAL_CONFIRMATION' if round_number == 3 else 'RESULT_REVIEW')
+        assert len(submitted['report']['data']['findings']) == len(requirements)
         assert submitted['supplier_review']['counts']['total'] == 1
         assert submitted['supplier_review']['counts']['accepted_previous'] == len(requirements) - 1
         assert [i['requirement_id'] for i in submitted['supplier_review']['items']] == [returned]
         assert not asyncio.run(run_once(app.state.sessions))
+        if round_number == 3:
+            next_detail = submitted
+            assert next_detail['baseline'] and not next_detail['baseline']['confirmations']
+            assert next_detail['report']['reviewed']
+            continue
         detail = analyze(app, customer, sid)
         assert len(detail['report']['data']['findings']) == len(requirements)
         with app.state.sessions() as db:
@@ -162,8 +170,9 @@ def test_targeted_rounds_preserve_accepted_items_until_independent_finalization(
 def test_owner_cannot_advance_without_complete_current_review(owner):
     app, customer, supplier, sid = invite_supplier(owner)
     detail = current(supplier, sid)
-    command(supplier, sid, 'supplier-submit', {'answers': {r['id']: {'implementation_status': 'yes'} for r in detail['prd']['data']['requirements']},
-                                             'round_version': detail['round']['version']})
+    answers = {r['id']: {'implementation_status': 'yes'} for r in detail['prd']['data']['requirements']}
+    answers[next(iter(answers))] = {'implementation_status': 'partial', 'limitations': 'Owner must review this exception'}
+    command(supplier, sid, 'supplier-submit', {'answers': answers, 'round_version': detail['round']['version']})
     detail = analyze(app, customer, sid)
     decisions = review_decisions(detail)
     command(customer, sid, 'review-decisions', {'decisions': {}, 'advance_workflow': True}, expected=422)

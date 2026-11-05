@@ -1,5 +1,17 @@
 # PRD 模板评审与接入
 
+## 2026-11-06：v4 八章正文与页尾精简
+
+默认 PRD 现在保留第 1–8 章，在“服务水平”后结束；移除第 9 章“交付与待确认事项”、其中的交付占位及假设/待确认清单，以及验收、实施说明、来源与版本附录。网页同时移除正文下的“逐项需求审查与编辑”折叠区，需求和验收仍可从页头“修改 PRD”查看与编辑。Word 和 Markdown 从同一保存稿导出，内容一致。
+
+新默认模板为 `System_Assessment_PRD_v4.md`，用 `<!-- syseval:prd-layout-v4 -->` 标识；未使用的附录、交付和问题占位符不再自动补回正文。业务需求、安全控制、问卷章节及网络拓扑仍保留覆盖检查和缺失补充。需求 JSON 中的验收、实施说明、假设、问题和来源引用仍用于评估、供应商协同及后续交付，不因移除展示而删除。
+
+更新已有草稿使用“应用当前模板（新修订）”，保留原需求、输出语言和生成方式，生成未批准的新 PRD；原文、模板快照和 hash 保留。仅在 PRD_REVIEW 允许，沿用当前 version/prd_id、组织及编辑权限检查；下发后的文档和已确认基线不重写。组织自定义模板与已排队任务保持其原有快照，旧 v3 模板仍支持原附录渲染。无需迁移或数据重置。
+
+English: The default v4 document has eight chapters and ends after Service levels. Delivery/open questions and all appendices are omitted from the saved document and both download formats. The duplicate footer editor is removed; the header editor and structured requirement, acceptance and source records remain. Refreshing a draft creates an unapproved revision without changing historical documents, supplier submissions or independent same-hash confirmations.
+
+离线回归覆盖中英文八章输出、旧 v3 兼容、来源/验收记录保留、Word/Markdown 一致、不可变历史、新修订和编辑/审批入口。
+
 ## 2026-11-04：v3 阅读与填写改版
 
 本次评估发现：安全需求重复显示项目描述与控制原文，并混入优先级、来源 UUID、测评步骤和文件行号；SLA 章节承担了全部需求验收与追踪；联系人挤在长行中，结构化数据量与恢复目标直接展示 JSON。大量空字段与重复说明妨碍填写和阅读。

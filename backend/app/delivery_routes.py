@@ -120,6 +120,15 @@ def register_routes(app, current, get_db):
         batch, item = item_for(db, user, item_id, 'draft')
         return mutate(request, db, user, batch, item, body, 'draft', lambda: workflow.save_draft(db, batch, item, body))
 
+    @app.get('/api/v1/delivery-items/{item_id}/audit-evidence-preview')
+    def audit_evidence_preview(item_id: str, language: str = 'zh', user=Depends(current), db=Depends(get_db)):
+        batch, item = item_for(db, user, item_id, 'upload')
+        workflow.editable(db, batch, item)
+        if language not in ('zh', 'en'):
+            raise DomainError('INVALID_FIELDS')
+        from .delivery_audit_demo import preview as audit_preview
+        return audit_preview(db, batch, item, language)
+
     @app.post('/api/v1/delivery-items/{item_id}/attachments')
     async def upload(item_id: str, request: Request, user=Depends(current), db=Depends(get_db)):
         batch, item = item_for(db, user, item_id, 'upload')

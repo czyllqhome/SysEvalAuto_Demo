@@ -7,6 +7,7 @@ import { AuthContext } from './components'
 import { LocaleProvider, useLocale } from './i18n'
 import type { SystemDetail } from './types'
 import { blankAnswer } from './supplierAnswers'
+import latestSupplierCases from '../../evals/fixtures/supplier-demo-latest.json'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear() })
 
@@ -34,25 +35,26 @@ it('shows only returned requirements with owner feedback and retains accepted an
   expect(screen.getByRole('button', { name: '提交答复' })).toBeEnabled()
 })
 
-it('fills and saves the reusable Demo exception and can undo to the authored draft', async () => {
+it.each(latestSupplierCases)('fills and saves the latest Demo answer for $description and restores the authored draft on undo', async ({ description, answer: expected }) => {
   const detail = fixture()
   detail.prd!.data.requirements[0] = { ...detail.prd!.data.requirements[0], origin: 'control',
-    description: '当进行远程管理时，应采取必要措施防止鉴别信息在网络传输过程中被窃听。' }
+    description }
   detail.round!.draft = { 'REQ-1': { ...blankAnswer(), limitations: '用户原有说明' } }
   const fetcher = vi.fn(async (_url, init) => init?.method === 'PUT' ? { ok: true, json: async () => detail } : { ok: true, text: async () => '# PRD' })
   vi.stubGlobal('fetch', fetcher)
   show(detail)
   fireEvent.click(screen.getByRole('button', { name: '一键填入 Demo' }))
   fireEvent.click(screen.getByRole('button', { name: /控制需求/ }))
-  expect(screen.getByText('无法完成 · 待负责人判断')).toBeVisible()
+  expect(screen.getByText(`${expected.implementation_status === 'no' ? '无法完成' : '需要澄清'} · 待负责人判断`)).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`${expected.implementation_status === 'no' ? '无法完成' : '需要澄清'} · 查看说明`) }))
+  expect(screen.getByLabelText('无法或部分完成的原因／待澄清内容（必填）')).toHaveValue(expected.limitations)
+  expect(screen.getByLabelText('补偿性措施（选填）')).toHaveValue(expected.alternative)
+  expect(screen.getByLabelText('预计天数（工作日，选填）')).toHaveValue(expected.duration_workdays)
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }))
   await waitFor(() => expect(fetcher.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true))
   const saved = JSON.parse(fetcher.mock.calls.find(([, init]) => init?.method === 'PUT')![1].body).answers['REQ-1']
-  expect(saved).toMatchObject({ implementation_status: 'no', duration_workdays: 20 })
-  expect(saved.limitations).toContain('演示场景')
-  expect(saved.alternative).toContain('停用')
+  expect(saved).toEqual(expected)
   fireEvent.click(screen.getByRole('button', { name: '撤销填入' }))
-  fireEvent.click(screen.getByRole('button', { name: /需要澄清 · 查看说明/ }))
   expect(screen.getByLabelText('无法或部分完成的原因／待澄清内容（必填）')).toHaveValue('用户原有说明')
 })
 
@@ -94,6 +96,33 @@ it('downloads the same PRD as Word while keeping the Markdown preview and author
   fireEvent.click(screen.getByText('English'))
   expect(screen.getByRole('link', { name: 'Download Word PRD' })).toHaveAttribute('href', '/api/v1/systems/s/prd-versions/prd/document?format=docx')
   expect(screen.getByRole('heading', { name: '已保存原文' })).toBeVisible()
+})
+
+it.each(['zh', 'en'])('ends the current PRD after service levels and keeps requirement editing available (%s)', async language => {
+  localStorage.setItem('scope-language', language)
+  const en = language === 'en'
+  const detail = fixture()
+  detail.system.status = 'PRD_REVIEW'
+  detail.prd!.approved = false
+  detail.round = null
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, text: async () => '<!-- syseval:prd-layout-v4 -->\n# 当前文档\n\n## 7 安全开发需求 / Security development requirements\n\n- 保留控制原文\n\n## 8 服务水平 / Service levels\n\nRTO: 8 小时' })
+  vi.stubGlobal('fetch', fetcher)
+  render(<QueryClientProvider client={new QueryClient()}><LocaleProvider><AuthContext.Provider value={{
+    user: { id: 'owner', name: 'Owner', email: 'owner@example.test', role: 'owner', org_id: 'customer' }, csrf: '', model_configured: false,
+  }}><MemoryRouter><PrdPanel detail={detail} /></MemoryRouter></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
+  expect(await screen.findByRole('heading', { name: '8 服务水平 / Service levels' })).toBeVisible()
+  expect(screen.getByText('保留控制原文')).toBeVisible()
+  expect(screen.queryByText(/逐项需求审查与编辑|Review and edit individual requirements/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/验收、实施说明与来源附录|Acceptance, implementation and source appendices/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('combobox', { name: en ? 'Requirement source' : '需求来源' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: en ? 'Approve PRD' : '确认 PRD' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: en ? 'Edit PRD' : '修改 PRD' }))
+  const editor = within(screen.getByRole('dialog'))
+  fireEvent.click(editor.getByText('REQ-1 · 身份认证'))
+  expect(editor.getByLabelText(en ? 'Description' : '需求描述')).toHaveValue('拒绝匿名请求')
+  expect(editor.getByLabelText(en ? 'Acceptance criteria, one per line' : '验收条件，每行一个')).toHaveValue('匿名请求返回 403')
+  fireEvent.click(editor.getByRole('button', { name: en ? 'Cancel' : '取消' }))
+  expect(fetcher.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true)
 })
 
 it('allows supplier inline PRD checkboxes and exceptions, saving reasons against the same requirement', async () => {
