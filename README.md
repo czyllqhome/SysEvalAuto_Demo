@@ -1,3 +1,15 @@
+> 2026-11-05 补充：来源高风险的待澄清项也必须由负责人逐项决定；可接受并记录责任理由，或要求澄清。批量操作跳过这些项；决定绑定当前提交和报告，不修改来源风险、供应商答复或独立双签要求。
+>
+> English: source-High clarification requires an individual owner decision. Acceptance requires a rationale and is bound to the current submission/report; bulk actions skip it.
+
+> 2026-11-05：供应商提交复核后仅保存不可变答复，直接进入负责人复核，不自动调用 AI 或排队影响分析。负责人默认查看开发项确认比例、部分/无法完成/待澄清数量，以及固定来源中高风险未确认项；后续规则/AI 审查按需显式发起，原双签及风险门槛保留。无需迁移或重置数据。详见[供应商协同说明](docs/supplier-prd-delivery.md)。
+>
+> English: submission now shows a pinned commitment summary without automatic analysis. Subsequent rule/model review is explicit; existing review gates and independent baseline confirmations remain intact.
+
+> 2026-11-05：AmerSports-2.18 / 规则引擎1.8.2 移除原定级 G02（来源 B03，`independent_business`）及其 QA01 边界复核规则。定级页现为14题，展示编号顺延为 G01–G14；缺失、否、不确定均不再触发该题的必填或复核。历史答案、说明、已确认结果及基线保留；重新计算使用新规则。责任主体校验继续有效，无需数据迁移或重置。
+>
+> English: The former G02 independent-business question and its QA01 review rule are retired. Grading now has 14 questions. Historical answers and confirmed snapshots remain intact; new calculations ignore this field. Responsibility checks remain active.
+
 > A04 综合描述已拆为 A04 建设目的、A05 业务功能、A06 使用场景，三题独立 AI 优化；A07 为业务类型。旧描述保留只读查阅。
 
 > 当前问卷已移除 G 章节：A–F 六章节、56 道有效题；历史答案保留，未填 G 项不再阻止提交。
@@ -23,7 +35,8 @@ review immutable supplier submission rounds, request more evidence and complete 
 Existing-system supplier remediation returns to customer retesting before gaps close.
 See [the development and implementation record](docs/finding-delivery-evidence-development.md).
 Deployments require the additive `delivery_evidence` migration; attachments stay in the
-configured database. AI evidence recognition remains a future extension.
+configured database. AI evidence assessment is available for immutable submitted files and
+screenshots, with separate customer acceptance. See [supplier PRD and delivery workflow](docs/supplier-prd-delivery.md).
 
 The control library now accepts seven-column labeled multi-framework Excel workbooks
 directly. `source` supplies the framework filter and `label` supplies the domain filter.
@@ -252,3 +265,10 @@ See [the dual-workflow update](docs/existing-system-assessment-update.md) and
 [implementation details](docs/implementation.md). Apply the additive
 `existing_assessments` migration before deployment; local auto-create adds missing
 tables on restart. Existing runtime records and baseline hashes remain unchanged.
+
+
+## 2026-11-04：PRD v3 阅读与填写
+
+默认 PRD 改为九章正文与可折叠附录，安全开发需求只按域展示控制内容；验收、项目实施说明与来源移至附录。联系人、数据范围与恢复目标使用可读格式；逐项编辑支持搜索和折叠。已有草稿可应用当前模板保存未批准新修订，保留需求 JSON、来源、生成方式与旧稿。无需迁移或重置数据。详见 [模板说明](docs/prd-template-review.md)。
+
+English: PRD v3 groups control-only security content by domain and separates acceptance/provenance appendices. Applying a template creates an unapproved revision, preserving history, references, generation mode and approval boundaries.

@@ -1,0 +1,31 @@
+.exemption-guide { max-width: 1480px; margin: 0 auto; color: #203b5b; }
+.exemption-guide header { margin-bottom: 24px; }
+.exemption-guide h1 { font-size: 28px; margin: 10px 0; }
+.exemption-guide p { line-height: 1.75; }
+.exemption-outcomes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
+.exemption-outcomes article, .exemption-rule-panel, .exemption-notes { border: 1px solid #d8e3ef; border-radius: 8px; background: #fff; padding: 22px; }
+.exemption-outcomes h2 { font-size: 18px; margin: 0 0 10px; }
+.exemption-outcomes p { margin: 0; }
+.exemption-rule-toolbar { display: flex; gap: 18px; align-items: end; flex-wrap: wrap; }
+.exemption-rule-toolbar h2 { margin: 0 auto 8px 0; font-size: 20px; }
+.exemption-rule-toolbar label { min-width: 130px; }
+.exemption-scope { color: #58708c; font-size: 13px; }
+.exemption-table-scroll { overflow-x: auto; }
+.exemption-guide table { width: 100%; min-width: 860px; table-layout: fixed; border-collapse: collapse; }
+.exemption-guide th, .exemption-guide td { padding: 18px 14px; font-size: 14px; line-height: 1.7; text-align: left; vertical-align: top; border-bottom: 1px solid #dfe7f1; }
+.exemption-guide thead th { background: #f1f5fb; letter-spacing: normal; }
+.exemption-guide th:first-child { width: 23%; }
+.exemption-guide th:nth-child(2) { width: 28%; }
+.exemption-guide th:last-child { width: 155px; }
+.exemption-guide tbody th { font-weight: 500; }
+.exemption-question-id { display: block; font-weight: 700; color: #315d8b; margin-bottom: 6px; }
+.exemption-guide td p { margin: 0 0 8px; }
+.exemption-guide details { font-size: 13px; margin-top: 10px; }
+.exemption-guide summary { color: #3f6390; cursor: pointer; }
+.exemption-guide details ul { padding-left: 20px; }
+.exemption-result { display: inline-block; border-radius: 20px; background: #edf2f8; color: #405d7a; padding: 3px 10px; font-size: 12px; }
+.exemption-result.exempted { background: #fff1dc; color: #8c5517; }
+.exemption-notes { margin-top: 24px; }
+.exemption-notes h2 { font-size: 20px; margin-top: 0; }
+.exemption-notes li { margin-bottom: 12px; line-height: 1.8; }
+@media (max-width: 800px) { .exemption-outcomes { grid-template-columns: 1fr; } .exemption-rule-panel { padding: 16px; } }

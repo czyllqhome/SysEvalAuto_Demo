@@ -184,15 +184,25 @@ class SupplierAnswer(StrictModel):
 
     @model_validator(mode="after")
     def conditional_fields(self):
-        if self.implementation_status in ("yes", "partial"):
-            if not self.duration_workdays or not self.owner_name or not self.implementation_plan:
-                raise ValueError("Implementation requires a duration, owner, and plan")
-        if self.implementation_status in ("partial", "no", "needs_clarification") and not self.limitations:
+        if self.implementation_status in ("partial", "no", "needs_clarification") and not self.limitations.strip():
             raise ValueError("Explain the gap or clarification question")
         if self.estimated_start_date and self.estimated_finish_date:
             if self.estimated_finish_date < self.estimated_start_date:
                 raise ValueError("Finish date precedes start date")
         return self
+
+
+class RiskEvidence(StrictModel):
+    path: str
+    quote: str
+
+
+class ContextualRisk(StrictModel):
+    exposure: str
+    exploitation_conditions: str
+    mitigations: str
+    uncertainties: list[str]
+    facts: list[RiskEvidence]
 
 
 class Finding(StrictModel):
@@ -204,6 +214,7 @@ class Finding(StrictModel):
     evidence: str
     impact: str
     recommendation: str
+    contextual_assessment: ContextualRisk | None = None
 
 
 class ImpactDocument(StrictModel):
@@ -211,7 +222,7 @@ class ImpactDocument(StrictModel):
     findings: list[Finding]
 
 
-def validate_report(data: dict, requirements: list[dict], answers: dict) -> dict:
+def validate_report(data: dict, requirements: list[dict], answers: dict, *, contextual_source=None) -> dict:
     report = ImpactDocument.model_validate(data).model_dump()
     ids = {item["id"] for item in requirements}
     seen = set()
@@ -221,7 +232,13 @@ def validate_report(data: dict, requirements: list[dict], answers: dict) -> dict
             raise DomainError("INVALID_SOURCE_REFERENCE")
         seen.add(finding["id"])
         status = answers[rid].get("implementation_status")
-        if status in ("partial", "no"):
+        context = finding.get('contextual_assessment')
+        if context and contextual_source is not None:
+            from .risk_context import validate_contextual_risk
+            validate_contextual_risk(context, contextual_source)
+            if context['uncertainties'] and finding['severity'] in ('low', 'medium'):
+                finding['severity'] = 'unknown'
+        if status in ("partial", "no") and not (context and contextual_source is not None):
             finding["severity"] = "medium" if status == "partial" else "high"
         source = str(answers[rid].get(finding["evidence_field"], ""))
         if not finding["evidence"] or finding["evidence"] not in source:

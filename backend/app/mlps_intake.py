@@ -16,6 +16,9 @@ def demo_template_for_org(org_id):
     return copy.deepcopy(DEMO_TEMPLATE['template']) if org_id == DEMO_TEMPLATE['source_org_id'] else None
 
 
+GRADING_FIELDS = frozenset(json.loads((Path(__file__).parent / 'data/mlps_grading_fields.json').read_text(encoding='utf-8')))
+
+
 MATRIX = {'rights': {1: 1, 2: 2, 3: 2}, 'public': {1: 2, 2: 3, 3: 4}, 'national': {1: 3, 2: 4, 3: 5}}
 CORE = [f'{dimension}_{obj}_severity' for dimension in ('info', 'service') for obj in MATRIX]
 SUPPORT = ('云计算平台/系统', '通信网络设施')
@@ -136,7 +139,7 @@ def evaluate(raw, notes=None):
             issue('OTHER_REQUIRED', key, '请填写其他选项的具体内容。', 'Specify the Other selection.')
     if a.get('security_responsible_entity') == '是' and not notes.get('security_responsible_entity', '').strip():
         issue('RESPONSIBLE_NAME_REQUIRED', 'security_responsible_entity', '请填写主要负责单位或部门名称。', 'Enter the responsible organization or department name.')
-    for key in ('security_responsible_entity', 'independent_business'):
+    for key in ('security_responsible_entity',):
         if a.get(key) == '否':
             issue('QA01', key, '已选择“否”：请复核该系统是否适合作为独立定级对象。', 'You selected No: review whether this system is suitable as an independent assessment target.')
         elif a.get(key) != '是':
@@ -257,8 +260,38 @@ def evaluate(raw, notes=None):
             'known_lower_bound_level': proposed, 'is_lower_bound_only': bool(unknown) or base is None or any(i['code'] in ('LINK_GRADE_UNKNOWN', 'NETWORK_MIN_UNKNOWN', 'SERVICE_MIN_UNKNOWN', 'TRANSACTION_MIN_UNKNOWN', 'BUSINESS_MIN_UNKNOWN', 'BUSINESS_MIN_REVIEW', 'POPULATION_MIN_UNKNOWN', 'POPULATION_MIN_REVIEW', 'PERSONAL_SCOPE_MIN_UNKNOWN', 'DATA_CLASS_MIN_UNKNOWN', 'CROSS_BORDER_MIN_UNKNOWN', 'RECORDS_MIN_UNKNOWN', 'STORAGE_MIN_UNKNOWN', 'DEPENDENCY_MIN_UNKNOWN', 'SAFETY_MIN_UNKNOWN') or i['code'] == 'REQUIRED' and i['field'] in ('interconnected_system_level', 'public_service_nature', 'involves_transactions', 'critical_business', 'personal_info_count_system', 'data_security_classification', 'cross_border_data', 'data_volume_ranges', 'external_dependency_impact', 'safety_impact') for i in issues), 'blocking_unknown_fields': unknown,
             'issues': issues, 'alerts': alerts, 'rule_trace': trace, 'final_confirmed_level': None,
             'manual_review_required': bool(issues) or bool(proposed and proposed >= 2),
-            'standard_version': 'GB/T 22240-2020', 'questionnaire_version': 'AmerSports-2.17', 'rule_engine_version': '1.8.1',
+            'standard_version': 'GB/T 22240-2020', 'questionnaire_version': 'AmerSports-2.18', 'rule_engine_version': '1.8.2',
             'sector_rules_status': 'not_collected', 'verified_sector_minimum': None}
+
+
+def evaluate_grading(raw, notes=None):
+    """Early rule preview; full questionnaire validation still gates confirmation."""
+    result = evaluate(raw, notes)
+    result['issues'] = [issue for issue in result['issues'] if issue['field'] in GRADING_FIELDS]
+    known = {q['key']: q for q in QUESTIONS}
+    for key in GRADING_FIELDS:
+        q = known[key]
+        if q['kind'] == 'severity' or not visible(q, raw):
+            continue
+        if raw.get(key) in (None, '', []) and not any(i['field'] == key for i in result['issues']):
+            result['issues'].append({'code': 'REQUIRED', 'field': key,
+                                     'zh': '请补充定级所需信息。', 'en': 'Complete this grading input.'})
+    result['status'] = 'insufficient_impact_data' if not result['base_level'] else 'pending_review' if result['issues'] else 'preliminary_complete'
+    result['is_lower_bound_only'] = result['is_lower_bound_only'] or any(i['code'] == 'REQUIRED' for i in result['issues'])
+    result['manual_review_required'] = bool(result['issues']) or bool(result['proposed_level'] and result['proposed_level'] >= 2)
+    return result
+
+
+def deployment_facts(value):
+    """Any selected cloud environment takes precedence over local environments."""
+    values = {value} if isinstance(value, str) else set(value or [])
+    if values & {'专有云', '公有云', '混合云', 'SaaS'}:
+        return ['cloud']
+    if not values or values & {'其他', '不确定'}:
+        return ['unknown']
+    if values <= {'本地数据中心', '托管机房', '门店或仓库本地部署'}:
+        return ['own_dc']
+    return ['unknown']
 
 
 def preview(db, org_id, body):
@@ -271,10 +304,18 @@ def preview(db, org_id, body):
         system = db.get(System, row.system_id) if row else None
         if not system or system.org_id != org_id or body.get('_system_id') and row.system_id != body['_system_id']:
             invalid('evidence', 'Evidence must belong to this assessment')
+        if ref in system.draft.get('removed_mlps_evidence', []):
+            invalid('evidence', 'Removed evidence cannot be reattached; upload the file again')
     contacts = body.get('department_contacts', {})
     department = next(q for q in QUESTIONS if q['key'] == 'system_owner')
     allowed = set(department['options'] + department.get('legacy_options', [])) - {'不确定'}
-    if not isinstance(contacts, dict) or set(contacts) - allowed or any(not isinstance(v, str) or len(v) > 500 for v in contacts.values()):
+    contact_fields = {'name', 'organization', 'title', 'scope', 'contact_method'}
+    def valid_contact(value):
+        if isinstance(value, str):
+            return len(value) <= 500
+        return (isinstance(value, dict) and not set(value) - contact_fields
+                and all(isinstance(v, str) and len(v) <= 500 for v in value.values()))
+    if not isinstance(contacts, dict) or set(contacts) - allowed or any(not valid_contact(v) for v in contacts.values()):
         invalid('department_contacts', 'Invalid departmental contacts')
     result = evaluate(answers, notes)
     catalog, release, cfg = screening.resolve(db, org_id, body.get('catalog_id'))
@@ -282,6 +323,10 @@ def preview(db, org_id, body):
     if not isinstance(frameworks, list) or not frameworks or any(f not in ('MLPS_LEVEL_1', 'MLPS_LEVEL_2', 'MLPS_LEVEL_3') for f in frameworks):
         invalid('frameworks', 'Choose MLPS level 1, 2 or 3 reference controls')
     facts = normalize_facts({}, cfg)
+    from .mlps_applicability import facts as applicability_facts
+    allowed_facts = {q['code'] for q in cfg['questions']}
+    facts.update({k: v for k, v in applicability_facts(answers).items() if k in allowed_facts})
+    facts['hosting.models'] = deployment_facts(answers.get('deployment_model'))
     facts['data.personal'] = {'是': 'yes', '否': 'no'}.get(personal_info_status(answers), 'unknown')
     facts['net.public_ingress'] = {'无': 'no', '存在公众可访问入口': 'yes', '存在受控互联网入口': 'yes'}.get(answers.get('external_network_access'), 'unknown')
     profiles = {f: [f'MLPS{f[-1]}_REFERENCE'] for f in frameworks}
@@ -289,7 +334,7 @@ def preview(db, org_id, body):
     missing = [f for f in frameworks if not any(c.get('source_framework') == f for c in controls)]
     level = f"L{result['proposed_level']}" if result['proposed_level'] else None
     return {'scheme': SCHEME, 'methodology_version': SCHEME, 'mode': 'questionnaire', 'reason': '',
-            'answers': answers, 'notes': notes, 'department_contacts': contacts, 'facts': facts, 'assessment': result,
+            'answers': answers, 'notes': notes, 'department_contacts': contacts, 'facts': facts, 'assessment': result, 'grading_assessment': evaluate_grading(answers, notes),
             'recommended_level': level, 'effective_level': level, 'input_hash': digest([answers, notes, contacts]),
             'questionnaire_hash': digest(QUESTIONS), 'questionnaire_source': 'MLPS_2.0_questionnaire_v1.0.md', 'questionnaire_profile': 'Amer Sports retail',
             'catalog_id': catalog.id if catalog else None, 'frameworks': frameworks, 'framework_profiles': profiles,
@@ -318,3 +363,28 @@ def confirm(db, system, payload):
     system.draft = {**system.draft, 'mlps_intake': {k: result[k] for k in ('answers', 'notes', 'department_contacts', 'frameworks', 'catalog_id')},
                     'proposal_stale': bool(system.draft.get('proposal'))}
     system.status = 'CONTEXT_REVIEW'
+
+
+def confirm_information(db, system, payload):
+    """Atomically confirm questionnaire facts and match controls without a brief page."""
+    from . import service
+    from .domain import Context
+    confirm(db, system, payload)
+    answers = system.classification['answers']
+    previous = system.draft.get('proposal') or system.context or {}
+    existing = {f['title']: f for f in previous.get('functions', [])}
+    titles = list(dict.fromkeys(line.strip() for line in answers.get('system_functions', '').splitlines() if line.strip()))
+    def values(key):
+        value = answers.get(key, [])
+        return value if isinstance(value, list) else [value] if value else []
+    context = Context().model_dump()
+    context.update(summary=answers.get('system_purpose', ''),
+                   functions=[{'id': f'F-QUESTIONNAIRE-{i + 1}', 'title': title,
+                               'description': existing.get(title, {}).get('description', ''), 'source_blocks': []}
+                              for i, title in enumerate(titles)],
+                   departments=values('system_owner'), roles=values('user_types'),
+                   workflow=answers.get('system_scenarios', ''), data_notes='、'.join(values('data_categories')),
+                   integrations=answers.get('system_interfaces_description', ''))
+    # Explicit confirmation replaces the source for this revision; historical drafts stay stored.
+    system.draft = {**system.draft, 'proposal_stale': False}
+    service.confirm_context(db, system, {'context': context})

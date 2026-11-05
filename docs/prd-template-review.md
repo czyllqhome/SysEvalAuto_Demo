@@ -1,6 +1,30 @@
-> 2026-11-03 Demo: 项目机制和控制库写入入口已停用；使用直接评估、CN MLPS 来源库和 PRD v2。Current behavior: [更新说明 / Current contract](direct-assessment-mlps.md).
-
 # PRD 模板评审与接入
+
+## 2026-11-04：v3 阅读与填写改版
+
+本次评估发现：安全需求重复显示项目描述与控制原文，并混入优先级、来源 UUID、测评步骤和文件行号；SLA 章节承担了全部需求验收与追踪；联系人挤在长行中，结构化数据量与恢复目标直接展示 JSON。大量空字段与重复说明妨碍填写和阅读。
+
+新版默认模板保留九章：背景与范围、相关人员与用户、使用场景与流程、功能需求、数据与接口、部署与架构、安全开发需求、服务水平、交付与待确认事项。缺失信息明确标注“待补充”，不推断负责人、指标或日期。联系人按部门分行；数据量显示问卷范围名称，恢复目标标明小时。
+
+第七章只显示域标题和控制内容。每个已纳入控制按其原始安全域分组一次；跨域需求分别归入各控制的域，同一个控制被多个需求引用时不重复。优先使用输出语言的原文，缺少时回退到已有中英文原文；没有原文时使用控制描述。正文不展示需求编号、优先级、来源、文件行号、测评步骤或验收条目。项目特有的模型/人工描述仍保留在附录 B，不以控制原文覆盖。
+
+附录 A 保存逐项验收；附录 B 保存安全实施说明；附录 C 保存来源映射、版本、生成方式和复核说明。网页默认折叠附录，Markdown 下载保留全部内容。规则草稿、模型草稿、人工修订仍清晰区分。需求 ID、来源覆盖、组织授权与独立同 hash 双签不变。
+
+填写路径：系统信息收集补齐事实 → 确认控制范围 → 生成 PRD → “修改 PRD”按编号/标题/内容搜索，再展开单项填写描述与验收 → 保存新修订 → 人工复核。模板编辑页提供填写说明与自动填充字段。
+
+已有文档不自动重写。PRD_REVIEW 阶段可点击“应用当前模板（新修订）”：保留原需求 JSON、ID、输出语言及生成方式，使用组织当前模板另存未批准修订。旧文件、模板快照及内容 hash 保留。操作要求当前 system version 和 prd_id；下发后禁止更新模板。此操作不调用模型，不自动批准或下发。已保存的组织自定义模板仍优先，不被默认模板覆盖。
+
+模板含 `<!-- syseval:prd-layout-v3 -->` 时启用新版排版；旧模板继续使用原排版。`<!-- syseval:prd-appendix -->` 分隔正文和网页可折叠附录。新增 `document_status`、`security_details` 字段，问卷分组字段 `scope_questions`、`roles_questions`、`workflow_questions`、`functions_questions`、`data_questions`、`security_questions`、`acceptance_questions`、`release_questions` 均可自动填充。不要删除新版标记或覆盖校验所需的内容块。
+
+English: v3 separates nine readable chapters from acceptance, implementation and provenance appendices. Security shows only domain headings and original control content, without losing project-specific prose or source mappings. Applying the current template creates an unapproved revision without model generation, retaining immutable history and existing authorization/version checks. Existing custom layouts remain in effect.
+
+Offline regression coverage includes control-only grouping, multilingual source fallback, multi-domain and duplicate references, authored prose preservation, readable ranges, legacy template snapshots, immutable template refresh, stale IDs, supplier-stage rejection and appendix disclosure.
+
+---
+
+## 历史评审与通用契约
+
+
 
 评审对象：用户提供的《应用开发 PRD 模板》1.0。原文保留于 `backend/app/templates/prd-reference.md`；实际默认布局为同目录 `prd.md`，采用 0–13 节结构及命名填充块。
 

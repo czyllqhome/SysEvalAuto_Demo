@@ -42,6 +42,33 @@ def register_routes(app, current, get_db, command):
             return {'mlps_evidence': {'id': row.id, 'filename': row.filename, 'sha256': row.sha256}}
         return command(request, db, user, system, body, 'mlps.evidence_uploaded', operation)
 
+    @app.post('/api/v1/systems/{system_id}/mlps-intake/evidence-removals')
+    def mlps_remove_evidence(system_id: str, body: dict, request: Request, user=Depends(current), db=Depends(get_db)):
+        from .db import MlpsEvidence
+        from .intake_evidence import without_reference
+        non_vendor(user)
+        system = service.system_for(db, user, system_id, write=True)
+        def operation():
+            service.require_state(system, 'DRAFT', 'CLASSIFYING', 'CONTEXT_REVIEW', 'CONTROL_REVIEW', 'PRD_REVIEW',
+                                  'RESULT_REVIEW', 'NEGOTIATING', 'FINAL_CONFIRMATION', 'PENDING_DEVELOPMENT', *service.revision_states(db, system))
+            if set(body) != {'version', 'evidence_id'} or not isinstance(body['evidence_id'], str):
+                raise DomainError('INVALID_FIELDS')
+            row = db.get(MlpsEvidence, body['evidence_id'])
+            if not row or row.system_id != system.id:
+                raise DomainError('NOT_FOUND', 404)
+            removed = system.draft.get('removed_mlps_evidence', [])
+            if row.id not in removed:
+                if system.classification or system.context_revision_id:
+                    service.invalidate(db, system, 'CLASSIFYING')
+                    system.classification = {}
+                    system.context_revision_id = None
+                saved = without_reference(system.draft.get('mlps_intake', {}), row)
+                system.draft = {**system.draft, 'mlps_intake': saved,
+                                'removed_mlps_evidence': [*removed, row.id],
+                                'proposal_stale': bool(system.draft.get('proposal'))}
+            return {'mlps_evidence_removed': {'id': row.id, 'filename': row.filename, 'sha256': row.sha256}}
+        return command(request, db, user, system, body, 'mlps.evidence_removed', operation)
+
     @app.get('/api/v1/systems/{system_id}/mlps-intake/evidence/{evidence_id}')
     def mlps_download(system_id: str, evidence_id: str, user=Depends(current), db=Depends(get_db)):
         from urllib.parse import quote

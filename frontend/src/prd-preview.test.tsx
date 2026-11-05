@@ -9,6 +9,14 @@ function View({ id = 'v1' }: { id?: string }) {
   return <LocaleProvider><Toggle /><PrdPreview systemId="system" prdId={id} /></LocaleProvider>
 }
 afterEach(() => { cleanup(); localStorage.clear(); vi.unstubAllGlobals() })
+it('keeps the main document readable and exposes the full appendix on demand', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response('# PRD\n\n## 7 安全开发需求\n\n### 网络安全\n\n- 控制内容\n\n<!-- syseval:prd-appendix -->\n\n## 附录 A 验收清单\n\nAC-REQ-001 原始验收条件')))
+  render(<QueryClientProvider client={new QueryClient()}><View /></QueryClientProvider>)
+  expect(await screen.findByText('控制内容')).toBeVisible()
+  expect(screen.getByText('AC-REQ-001 原始验收条件')).not.toBeVisible()
+  fireEvent.click(screen.getByText('验收、实施说明与来源附录'))
+  expect(screen.getByText('AC-REQ-001 原始验收条件')).toBeVisible()
+})
 it('displays embedded raster topology images while blocking SVG and remote image requests', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response('## 系统开发架构\n\n### 网络拓扑图\n\n![网络拓扑图](data:image/png;base64,YWJj)\n\n![svg](data:image/svg+xml;base64,YWJj)\n\n![remote](https://example.test/tracker.png)')))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

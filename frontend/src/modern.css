@@ -163,10 +163,18 @@ fieldset:disabled .fact-multi-option { cursor: default; }
 @media (min-width: 601px) {
   .discovery-layout.description-only { grid-template-columns: 220px minmax(0, 1fr); }
   .controls-layout { grid-template-columns: 200px minmax(0, 1fr) 230px; }
+  .controls-layout:has(.control-domain-rows) { grid-template-columns: 200px minmax(0, 760px) 230px; }
 }
 @media (min-width: 601px) and (max-width: 1280px) {
   .controls-layout { grid-template-columns: 200px minmax(0, 1fr); }
+  .controls-layout:has(.control-domain-rows) { grid-template-columns: 200px minmax(0, 760px); }
 }
+.control-domain-rows .control-domain-heading { flex-wrap: wrap; gap: 6px 16px; }
+.control-match-summary .stat-strip { grid-template-columns: repeat(5, minmax(0, 1fr)); row-gap: 20px; }
+.control-match-summary .stat-strip > div > span { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.control-match-summary caption { padding: 12px; text-align: left; font-weight: 600; }
+@media (max-width: 1000px) { .control-match-summary .stat-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .control-match-summary .stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
   .prd-import-panel { padding: 14px 16px; }
   .prd-import-actions { width: 100%; }
@@ -213,5 +221,13 @@ fieldset:disabled .fact-multi-option { cursor: default; }
 .prd-markdown table { font-size: 13px; }
 .prd-markdown th { font-family: inherit; font-size: 12px; }
 .prd-markdown td, .prd-markdown th { padding: 10px 12px; }
+.prd-markdown > h2 { padding: 18px 0 12px; color: #1d3657; border-bottom: 1px solid #e2e8f0; }
+.prd-markdown > h3 { color: #334e6d; }
+.prd-markdown > ul > li { padding: 8px 4px; line-height: 1.9; }
+.prd-appendix, .prd-edit-item { margin-top: 24px; border: 1px solid #dce5ef; border-radius: 10px; padding: 16px 20px; background: #f8fafc; }
+.prd-appendix > summary, .prd-edit-item > summary { cursor: pointer; font-weight: 600; color: #334e6d; line-height: 1.7; }
+.prd-edit-item { margin-top: 12px; }
+.prd-edit-item[open] > summary { margin-bottom: 16px; }
+.prd-appendix .table-scroll { max-width: 100%; }
 .prd-requirement-editor { border-top: 1px solid var(--rule); margin-top: 28px; padding-top: 18px; }
 .prd-requirement-editor > summary { font-size: 14px; cursor: pointer; font-weight: 600; }

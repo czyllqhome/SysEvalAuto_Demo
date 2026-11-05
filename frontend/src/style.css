@@ -470,3 +470,29 @@ summary { cursor: pointer; }
 .audit-detail { white-space: pre-wrap; overflow-wrap: anywhere; padding: 20px; border-radius: 12px; background: #f3f6fb; max-height: 55vh; overflow: auto; }
 .audit-metadata { display: grid; grid-template-columns: auto 1fr; gap: 12px 24px; }
 .audit-metadata dd { margin: 0; overflow-wrap: anywhere; }
+
+.mlps-department-contacts > fieldset { min-width: 0; border: 1px solid var(--rule); padding: 16px; display: grid; gap: 12px; }
+.mlps-department-contacts > fieldset label { display: flex; flex-direction: column; gap: 6px; }
+
+.control-view-switch { display: flex; flex-shrink: 0; gap: 4px; }
+.control-view-switch button { border: 1px solid #cbd5e1; background: white; color: #334155; border-radius: 5px; padding: 7px 10px; cursor: pointer; }
+.control-view-switch button[aria-pressed="true"] { color: #1d4ed8; border-color: #2563eb; background: #eff6ff; }
+.control-card-grid.control-domain-rows { display: flex; flex-direction: column; gap: 8px; }
+.control-domain-rows .control-domain-heading { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; margin: 12px 0 0; border-left: 3px solid #2563eb; background: #eef4fc; color: #1e3a5f; }
+.control-domain-heading small { font-size: 11px; font-weight: normal; }
+.control-domain-rows .control-row { width: 100%; min-height: 0; box-sizing: border-box; padding: 14px; }
+.control-domain-rows .control-row > div { flex: 1; min-width: 0; }
+.control-domain-rows .control-row h3 { margin: 5px 0; }
+.control-domain-rows .control-row p { margin: 6px 0; }
+@media (max-width: 900px) { .control-toolbar { flex-wrap: wrap; } }
+
+/* PRD responses stay adjacent to their immutable requirement and criteria. */
+.supplier-prd { max-width: 1150px; margin: 20px auto; }
+.supplier-prd-requirement { padding: 24px 0; border-top: 1px solid var(--border, #d7e2f0); }
+.supplier-prd-requirement > header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.supplier-prd-requirement > header h3 { flex: 1; }
+.supplier-inline-response { margin-top: 18px; padding: 20px; background: #f4f8fd; border: 1px solid #d7e2f0; }
+.supplier-inline-response legend { font-weight: 600; }
+.supplier-inline-response > label { margin-bottom: 14px; }
+.supplier-inline-response:disabled { opacity: 1; }
+.contextual-risk, .delivery-ai { padding: 16px; margin: 16px 0; background: #f4f8fd; border-left: 3px solid #397cc0; }

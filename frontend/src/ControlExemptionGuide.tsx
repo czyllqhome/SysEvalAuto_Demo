@@ -1,0 +1,27 @@
+import { useState } from 'react'
+import { useLocale } from './i18n'
+import guide from './control-exemption-guide.json'
+import './control-exemption-guide.css'
+
+export default function ControlExemptionGuide() {
+  const { t, locale } = useLocale()
+  const [level, setLevel] = useState('all')
+  const [search, setSearch] = useState('')
+  const rows = guide.filter(row => (level === 'all' || level in row.references) &&
+    `${row.question_id} ${row.question[locale]} ${row.trigger[locale]} ${row.effect[locale]} ${Object.values(row.references).join(' ')}`.toLowerCase().includes(search.trim().toLowerCase()))
+  return <section className="exemption-guide">
+    <header><span className="eyebrow">CONTROL EXEMPTIONS</span><h1>{t('控制项豁免机制', 'Control exemption rules')}</h1><p>{t('对照系统信息收集中的实际答案，查看哪些控制会被豁免、判定不适用或保留待确认。', 'See which controls are exempted, not applicable or pending based on factual answers in System information.')}</p></header>
+    <div className="exemption-outcomes">
+      <article><h2>{t('豁免', 'Exempted')}</h2><p>{t('通用控制在确认不涉及自行开发、外包开发、运维或实体管理等活动时按范围规则豁免；云部署下的物理环境控制按部署规则豁免。人工排除也计入豁免，须记录理由并进入例外审查。', 'Confirmed out-of-scope development, operations or physical-management activities exempt their general controls by scope. Cloud deployment exempts physical-environment controls. Manual exclusions also count as exemptions and require reasons and exception review.')}</p></article>
+      <article><h2>{t('不适用', 'Not applicable')}</h2><p>{t('扩展控制未满足适用条件时判为不适用，例如明确非云部署时的云计算安全扩展要求。', 'Extension controls are not applicable when their applicability conditions are absent, such as cloud security extensions for confirmed non-cloud deployment.')}</p></article>
+      <article><h2>{t('待确认', 'Pending')}</h2><p>{t('未填写或“不确定”不等于“否”。条件未知时保留待确认，补充事实后重新匹配。', 'Unanswered or Unknown does not mean No. Unknown conditions remain pending until facts are confirmed and controls are rematched.')}</p></article>
+    </div>
+    <section className="exemption-rule-panel"><div className="exemption-rule-toolbar"><h2>{t('问题、答案与控制项对照', 'Questions, answers and affected controls')}</h2><label>{t('参考等级', 'Reference level')}<select value={level} onChange={e => setLevel(e.target.value)}><option value="all">{t('全部等级', 'All levels')}</option>{['1', '2', '3'].map(value => <option key={value} value={value}>L{value}</option>)}</select></label><label>{t('搜索规则', 'Search rules')}<input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('题号、活动或条款', 'Question, activity or clause')} /></label></div>
+      <p className="exemption-scope">{t('题号对应“系统信息收集”页面。以下为当前应用的规则说明，仅影响控制匹配，不改变系统等级；实际条目以评估所固定的控制库及所选参考等级为准。', 'Question IDs match System information. These are current application rules for control matching, not grading. Actual controls depend on the assessment’s pinned catalog and selected reference level.')}</p>
+      <div className="exemption-table-scroll"><table><thead><tr>{[t('问卷问题', 'Question'), t('什么回答触发', 'Triggering answer'), t('影响哪些控制', 'Affected controls'), t('判定结果', 'Outcome')].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{rows.map(row => <tr key={row.id}>
+        <th scope="row"><span className="exemption-question-id">{row.question_id}</span>{row.question[locale]}</th><td>{row.trigger[locale]}</td><td><p>{row.effect[locale]}</p><details><summary>{t('适用等级与条款范围', 'Levels and clause ranges')}</summary><ul>{Object.entries(row.references).filter(([key]) => level === 'all' || key === level).map(([key, value]) => <li key={key}><strong>L{key}</strong> · {row.domain ? row.domain === '安全物理环境' ? t('安全物理环境全部条目', 'All physical-environment controls') : t('云计算安全扩展要求全部条目', 'All cloud security extensions') : value}</li>)}</ul><p>{t('未列出的等级或条款不会因本行答案自动排除。', 'Levels or clauses not listed are not automatically excluded by this answer.')}</p></details></td><td><span className={`exemption-result ${row.outcome}`}>{row.outcome === 'exempted' ? row.id === 'cloud-physical' ? t('部署规则豁免', 'Deployment exemption') : t('范围规则豁免', 'Scope exemption') : t('规则判定不适用', 'Not applicable by rule')}</span></td>
+      </tr>)}</tbody></table></div>{!rows.length && <p role="status">{t('没有匹配的规则。', 'No matching rules.')}</p>}
+    </section>
+    <section className="exemption-notes"><h2>{t('回答后如何生效', 'How answers take effect')}</h2><ol><li>{t('按实际职责填写。供应商承担但本次评估仍需履责取证的活动，应回答“是”；软件二次开发也要计入开发方式。', 'Answer for the actual responsibility scope. Select Yes for provider activities that still require assurance evidence; include software customization in development modes.')}</li><li>{t('保存并确认系统信息后，系统根据已确认答案重新匹配控制。单纯保存草稿不会改变已确认的控制范围；修改已确认信息后需重新确认。', 'Save and confirm System information to rematch controls. Saving a draft alone does not change the confirmed scope; changed information requires reconfirmation.')}</li><li>{t('部署方式含任一云选项时按云处理；只有“其他”、未填写或“不确定”时待确认。开发方式包含“不确定”时，两类开发控制均待确认。', 'Any cloud option takes priority. Other-only, unanswered or Unknown deployment remains pending. Unknown development modes leave both development groups pending.')}</li><li>{t('需要单独排除其他控制时，在“安全控制匹配”中填写排除理由；必选控制的人工排除仍须例外审查。豁免或不适用均不等于该控制已通过验证。', 'To exclude another control, record the reason in Security control matching. Manual exclusion of required controls still needs exception review. Exempted or not applicable does not mean verified.')}</li></ol></section>
+  </section>
+}

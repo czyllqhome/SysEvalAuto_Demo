@@ -96,3 +96,42 @@ immutable MLPS1/2/3 reference catalogs. High + unable fails supplier security as
 unresolved High commitments block acceptance and baseline progression. Evidence-based
 customer acceptance still follows feasibility commitments. No assessment procedures are
 fabricated from the six-column source. Historical assessments explicitly opt into new releases.
+
+
+## 2026-11-04：控制列表中文来源兼容修复
+
+控制列表接口支持仅有中文名称的控制域；英文界面保留中文来源名称，不要求来源库补造英文名称。列表加载失败时不再同时提示“没有匹配条目”。本修复不改变已选控制、来源快照或评估记录。离线回归覆盖中文域名、分页及按域筛选。
+
+Control listing accepts Chinese-only domain names and preserves them in both interface languages. Failed requests no longer appear as empty matches. Selection records and source snapshots are unchanged.
+
+## Deployment-based MLPS domains (2026-11-04)
+
+六字段新发布为安全物理环境和云计算安全扩展要求添加互斥适用规则。问卷 deployment_model 中任一专有云、公有云、混合云、SaaS 优先归为云，即使同时选择本地部署：纳入同级全部云扩展条目，排除同级物理环境条目。明确本地数据中心、托管机房、门店或仓库部署时反向匹配；缺失、其他、不确定保留待确认，不静默排除。其他域及 risk_level 规则保持不变。
+
+Derived hosting.models facts and rule answer references are pinned with classification and control snapshots. New releases apply the domain switch across levels 1–3. Historical releases remain unchanged; existing assessments explicitly load the latest catalog and reconfirm information. Named source replacement preserves raw uploads and immutable releases, rejects omitted controls or cross-file identity collisions, and updates only the authorized organization.
+
+新版三文件已导入：66 / 164 / 257 条，总计 487；云计算扩展 11 / 29 / 46 条。一级 6.2.5.2 的空 risk_level 经用户确认补为 Medium，发布来源记录 original_fields/corrections，原始上传字节仍保留。运行库导入前执行 SQLite backup，三文件在一个事务内更新，历史 catalog 不改写。
+
+2026-11-04 控制适用性补充：信息收集新增软件开发/交付方式（多选）、外包运维、实体介质、介质运输、机房管理责任（含云商取证）、现场访客六题，不参与等级计算。Demo 信息题为30、定级题仍15。六字段新发布按来源编号固定匹配自行/外包开发、外包运维、介质存放/运输、机房管理与物理访客控制；unknown 留作候选，只有明确不涉及才自动排除。保留云扩展、备份与通用安全条目，不按控制域泛化删除。匹配快照保留规则、答案及来源，界面展示具体理由；修改问卷沿用修订失效机制，旧评估显式加载新控制库后确认信息。
+Six scope questions drive versioned control applicability without affecting grading. Unknown answers remain candidates. Mixed development modes retain both sets; outsourced assurance is not a blanket exemption.
+
+
+## 2026-11-04：供应商 PRD 答复至交付验收
+
+当前行为以 [供应商协同与 AI 交付说明](supplier-prd-delivery.md) 为准：PRD 原文下直接勾选可完成性、填写部分/无法完成原因；
+来源 High 保持原等级，依据固定系统事实进行 AI 情境分析，低/中残余风险也须客户人工审查接受。
+这替代早期按 no 永久判 High 失败及所有模型严重度强制覆盖的实现。
+独立双签同一 hash 后可下载最终 Markdown 稿；开发项按已承诺的 PRD requirement 追踪，附件提交后自动
+启动有配置的 AI 逐项评估，保留独立人工验收、来源校验、版本隔离和不可变证据。原运行数据不重置。
+
+English: inline supplier PRD responses, evidence-bound contextual impact assessment, jointly confirmed
+final export, and per-requirement delivery AI are implemented. AI does not approve on behalf of either party.
+
+
+## 2026-11-05：区分控制不适用与人工豁免
+
+控制匹配统计新增“不适用”及独立原因列表。已确认条件经规则判定不适用、且没有人工排除理由的条目归入不适用；人工填写原因的排除归入豁免，仍需例外审查。未知适用条件以及需重新确认的候选保持待确认。原始条目 = 已纳入 + 不适用 + 豁免 + 待确认；跨等级、非固定控制库与额外自定义条目沿用原统计边界。
+
+明确非云部署时云计算安全扩展要求归入不适用；云部署时自动排除的物理环境要求也采用相同口径。缺失、其他或不确定的部署不因未勾选云而自动判定不适用。匹配算法及控制范围没有更改，原有来源、版本和审批记录保留。统计卡片桌面五列、小屏换行，中英文文案同步。
+
+English: Counts now separate rule-based non-applicability from manually reasoned exemptions. Non-cloud deployment makes cloud extensions not applicable; unknown deployment remains pending. Counts retain pinned-catalog/reference-level boundaries and do not alter selection or approval records.

@@ -58,3 +58,7 @@
 .network-topology figure { margin: 18px 0; }
 .network-topology-image { display: block; max-width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 6px; }
 .network-topology figcaption { margin-top: 8px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
+.prd-questionnaire-facts dd:has(table) { overflow-x: auto; }
+
+.owner-clarification-notice { grid-column: 1 / -1; margin: 0; padding: 12px 14px; background: #fff5eb; border: 1px solid #e8d0bb; color: #875327; border-radius: 6px; line-height: 1.7; }

@@ -16,6 +16,7 @@ MIMES = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'webp': 
          'pdf': 'application/pdf', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
          'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
          'txt': 'text/plain', 'csv': 'text/csv', 'md': 'text/markdown'}
+MIMES.update({ext: 'text/plain' for ext in ('py', 'js', 'ts', 'tsx', 'jsx', 'java', 'cs', 'go', 'rs', 'sql', 'json', 'yaml', 'yml', 'sh', 'ps1', 'c', 'cpp', 'h', 'diff', 'log')})
 
 
 def validate_file(filename, content):

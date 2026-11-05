@@ -193,6 +193,15 @@ def register_routes(app, current, get_db):
         batch, item = item_for(db, user, submission.item_id, 'review')
         return mutate(request, db, user, batch, item, body, 'review', lambda: workflow.review(db, user, batch, item, submission, body))
 
+    @app.post('/api/v1/delivery-submissions/{submission_id}/ai-assessments')
+    def analyze(submission_id: str, body: dict, request: Request, user=Depends(current), db=Depends(get_db)):
+        submission = db.get(DeliverySubmission, submission_id)
+        if not submission:
+            raise DomainError('NOT_FOUND', 404)
+        batch, item = item_for(db, user, submission.item_id, 'analyze')
+        return mutate(request, db, user, batch, item, body, 'ai_requested',
+                      lambda: workflow.analyze(db, batch, item, submission, body))
+
     @app.post('/api/v1/delivery-items/{item_id}/reopen')
     def reopen(item_id: str, body: dict, request: Request, user=Depends(current), db=Depends(get_db)):
         batch, item = item_for(db, user, item_id, 'review')

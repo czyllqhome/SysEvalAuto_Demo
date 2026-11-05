@@ -91,3 +91,102 @@ def test_level_one_mapping_publication_and_idempotency(owner):
         assert len(list(db.scalars(select(Catalog).where(Catalog.code == 'MLPS-SIX')))) == 1
         with pytest.raises(DomainError):
             import_file(db, user, 'MLPS_level_1_CN.csv', raw, level=3)
+
+
+@pytest.mark.parametrize('level', [1, 2, 3])
+@pytest.mark.parametrize(('deployment', 'expected'), [
+    (['专有云'], 'cloud'), (['公有云'], 'cloud'), (['混合云'], 'cloud'), (['SaaS'], 'cloud'),
+    (['本地数据中心', '公有云'], 'cloud'), (['本地数据中心'], 'physical'),
+    (['托管机房'], 'physical'), (['门店或仓库本地部署'], 'physical'),
+    ([], None), (['不确定'], None), (['其他'], None),
+])
+def test_deployment_selects_exclusive_domains(owner, level, deployment, expected):
+    from app.six_field_controls import import_file
+    from app.mlps_intake import preview
+    app, client = owner
+    uid = client.get('/api/v1/auth/session').json()['user']['id']
+    with app.state.sessions.begin() as db:
+        user = db.get(User, uid)
+        raw = file_bytes([['S', '1', '安全物理环境', '物理', '要求', 'Low'],
+                          ['S', '2', '云计算安全扩展要求', '云', '要求', 'High'],
+                          ['S', '3', '安全计算环境', '通用', '要求', 'Low']])
+        import_file(db, user, f'MLPS_level_{level}_CN.csv', raw)
+        result = preview(db, user.org_id, {'answers': {'deployment_model': deployment}, 'frameworks': [f'MLPS_LEVEL_{level}']})
+        decisions = {r['source_ref']: r for r in result['matches']}
+        assert decisions['3']['status'] == 'applicable'
+        for code, kind in [('1', 'physical'), ('2', 'cloud')]:
+            assert decisions[code]['status'] == ('unknown' if expected is None else 'applicable' if kind == expected else 'inapplicable')
+            assert decisions[code]['answer_refs'] == ['hosting.models']
+
+
+def test_named_source_update_preserves_upload_and_release(owner):
+    from app.six_field_controls import import_file
+    from app.db import LibraryRelease
+    app, client = owner
+    uid = client.get('/api/v1/auth/session').json()['user']['id']
+    with app.state.sessions.begin() as db:
+        user = db.get(User, uid)
+        old, _ = import_file(db, user, 'MLPS_level_1_CN.csv', file_bytes())
+        catalog_id = db.get(LibraryWorkspace, user.org_id).published_id
+        snapshot = db.get(LibraryRelease, catalog_id).data
+        updated = file_bytes([['MLPS sample', '001', '域', '控制点', 'Updated', 'high'], ['MLPS sample', '002', '云计算安全扩展要求', '云', 'Cloud', 'low']])
+        new, _ = import_file(db, user, 'MLPS_level_1_CN.csv', updated, replace=True)
+        assert new.id != old.id and db.get(SixFieldUpload, old.id).content == file_bytes()
+        assert db.get(LibraryRelease, catalog_id).data == snapshot
+        assert len(list(db.scalars(select(SixFieldControl)))) == 2
+        same, repeated = import_file(db, user, 'MLPS_level_1_CN.csv', updated, replace=True)
+        assert repeated and same.id == new.id
+
+
+def test_explicit_risk_correction_retains_original_source(owner):
+    from app.six_field_controls import import_file
+    from app.db import LibraryRelease
+    app, client = owner
+    uid = client.get('/api/v1/auth/session').json()['user']['id']
+    raw = file_bytes([['MLPS', '6.2.5.2', '云计算安全扩展要求', '供应链管理', '要求', '']])
+    with pytest.raises(DomainError):
+        parse('MLPS_level_1_CN.csv', raw)
+    with app.state.sessions.begin() as db:
+        user = db.get(User, uid)
+        upload, _ = import_file(db, user, 'MLPS_level_1_CN.csv', raw, risk_overrides={'6.2.5.2': 'Medium'})
+        release = db.get(LibraryRelease, db.get(LibraryWorkspace, user.org_id).published_id)
+        source = release.data['controls'][0]['source']['languages']['zh']
+        assert upload.content == raw
+        assert source['fields']['risk_level'] == 'Medium'
+        assert source['original_fields']['risk_level'] == ''
+        assert source['corrections']['risk_level'] == {'original': '', 'confirmed': 'Medium'}
+
+
+@pytest.mark.parametrize('level', [1, 2, 3])
+@pytest.mark.parametrize(('answer', 'status'), [('是', 'applicable'), ('否', 'inapplicable'), ('不确定', 'unknown')])
+def test_supplemental_scope_answers_match_published_controls(owner, level, answer, status):
+    from app.six_field_controls import import_file
+    from app.mlps_intake import preview
+    app, client = owner
+    uid = client.get('/api/v1/auth/session').json()['user']['id']
+    prefix = str(level + 5)
+    refs = ['6.1.9.1-a)', '6.1.9.1-b)', '6.1.9.2'] if level == 1 else [f'{prefix}.1.10.1-a)', f'{prefix}.1.10.1-b)', f'{prefix}.1.10.3-a)', f'{prefix}.1.10.3-b)', f'{prefix}.1.8.4-a)', f'{prefix}.1.10.14-a)']
+    with app.state.sessions.begin() as db:
+        user = db.get(User, uid)
+        import_file(db, user, f'MLPS_level_{level}_CN.csv', file_bytes([['S', ref, '管理', '控制', '要求', 'Low'] for ref in refs] + [['S', 'unrelated', '管理', '备份', '保留备份', 'Low']]))
+        answers = {key: answer for key in ['outsourced_operations', 'physical_media', 'physical_media_transport', 'facility_management', 'physical_visitors']}
+        result = preview(db, user.org_id, {'answers': answers, 'frameworks': [f'MLPS_LEVEL_{level}']})
+        for decision in result['matches']:
+            assert decision['status'] == ('applicable' if decision['source_ref'] == 'unrelated' else status)
+            if decision['source_ref'] != 'unrelated':
+                assert decision['answer_refs'] and decision['fact_values']
+
+
+@pytest.mark.parametrize(('models', 'in_house', 'outsourced'), [
+    (['自行开发'], True, False), (['外包开发'], False, True),
+    (['自行开发', '外包开发'], True, True), (['采购成品或SaaS'], False, False),
+    ([], None, None), (['不确定'], None, None),
+])
+def test_development_scope_supports_mixed_delivery_and_unknown(models, in_house, outsourced):
+    from app.mlps_applicability import facts, rule
+    from app.control_rules import evaluate_rule
+    for level in (2, 3):
+        assert evaluate_rule(rule(f'{level + 5}.1.9.4 -a) ', level), facts({'development_models': models})) is in_house
+        assert evaluate_rule(rule(f'{level + 5}.1.9.5-b)', level), facts({'development_models': models})) is outsourced
+    assert rule('7.1.10.11-b)', 2) is True  # Backup media requirements are not exempted.
+    assert rule('7.2.5.1-a)', 2) is True  # Cloud supplier assurance remains applicable.

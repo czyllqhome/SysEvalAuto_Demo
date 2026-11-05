@@ -115,15 +115,15 @@ it('keeps newer edits when a delayed save response arrives while another save is
     return <BriefReviewPanel detail={query.data} />
   }
   render(<QueryClientProvider client={client}><LocaleProvider><AuthContext.Provider value={session}><Preferences><MemoryRouter><LiveReview /></MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
-  fireEvent.change(screen.getByLabelText('功能 1'), { target: { value: 'First edit' } })
+  fireEvent.change(screen.getByLabelText('交付约束'), { target: { value: 'First edit' } })
   fireEvent.click(screen.getByRole('button', { name: '保存说明修改' }))
-  fireEvent.change(screen.getByLabelText('功能 1'), { target: { value: 'Newer edit while saving' } })
+  fireEvent.change(screen.getByLabelText('交付约束'), { target: { value: 'Newer edit while saving' } })
   await act(async () => { await vi.advanceTimersByTimeAsync(1100) })
   await act(async () => { pending.shift()!(); await vi.advanceTimersByTimeAsync(1) })
-  expect(screen.getByLabelText('功能 1')).toHaveValue('Newer edit while saving')
-  expect(bodies[1].proposal.functions[0].title).toBe('Newer edit while saving')
+  expect(screen.getByLabelText('交付约束')).toHaveValue('Newer edit while saving')
+  expect(bodies[1].proposal.constraints).toBe('Newer edit while saving')
   await act(async () => { pending.shift()!(); await vi.advanceTimersByTimeAsync(1) })
-  expect(screen.getByLabelText('功能 1')).toHaveValue('Newer edit while saving')
+  expect(screen.getByLabelText('交付约束')).toHaveValue('Newer edit while saving')
 })
 
 it('fills demo notes only on request and restores authored text on undo', () => {
@@ -146,12 +146,7 @@ it('explains unpublished controls before confirmation and preserves editable req
   expect(screen.getByRole('alert')).toHaveTextContent('下一步前置条件：已发布且匹配所选方案的控制库')
   expect(screen.getByRole('link', { name: '查看控制条目库' })).toHaveAttribute('href', '/library')
   expect(screen.getByRole('button', { name: '保存说明并前往确认等级' })).toBeEnabled()
-  for (const name of ['功能 1']) {
-    const field = screen.getByRole('textbox', { name })
-    expect(field).toBeRequired()
-    expect(field.closest('label')?.querySelector('.required-mark')).toHaveTextContent('必填')
-  }
-  expect(screen.getByRole('textbox', { name: '功能说明' })).not.toBeRequired()
+  expect(screen.queryByRole('textbox', { name: '功能说明' })).not.toBeInTheDocument()
   expect(screen.queryByRole('textbox', { name: '业务流程' })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('checkbox', { name: '我已核对说明和职责' }))
   expect(screen.getByRole('button', { name: '确认说明并匹配控制' })).toBeDisabled()
@@ -159,24 +154,13 @@ it('explains unpublished controls before confirmation and preserves editable req
   expect(fetcher).not.toHaveBeenCalled()
 })
 
-it('allows confirmation with a ready published profile and marks a missing required field locally', () => {
-  show({ ...detail, system: { ...detail.system, classification: { scheme: 'SYS-SCREEN/2', effective_level: 'L3', controls_ready: true }, draft: { ...detail.system.draft, proposal: { ...brief, functions: [{ ...brief.functions[0], title: '' }] } } } })
-  const owner = screen.getByRole('textbox', { name: '功能 1' })
-  expect(owner).toHaveAttribute('aria-invalid', 'true')
-  expect(screen.getAllByText('请补充功能需求').length).toBeGreaterThan(0)
-  fireEvent.change(owner, { target: { value: '业务责任人' } })
-  fireEvent.click(screen.getByRole('checkbox', { name: '我已核对说明和职责' }))
-  expect(screen.getByRole('button', { name: '确认说明并匹配控制' })).toBeEnabled()
-})
-
-
 it('opens an editable questionnaire-prefilled brief without the retired information page', () => {
   show({ ...detail, system: { ...detail.system, draft: {}, classification: {
     effective_level: 'L2', scheme: 'MLPS-INTAKE/1', controls_ready: true,
     answers: { system_purpose: 'Authored purpose', system_functions: 'Authored function', system_scenarios: 'Authored scenario' },
   } } })
   expect(screen.getByText('Authored purpose')).toBeVisible()
-  expect(screen.getByLabelText('功能 1')).toHaveValue('Authored function')
+  expect(screen.getByText('Authored function')).toBeVisible()
   expect(screen.getByText('Authored scenario')).toBeVisible()
   expect(screen.queryByLabelText('业务责任角色')).not.toBeInTheDocument()
   expect(screen.getByText('问卷内容预填 · 待人工核对')).toBeInTheDocument()
@@ -214,7 +198,7 @@ it('applies PRD review exclusions and shows recorded department contacts and sec
   expect(screen.queryByText(/B03 ·/)).not.toBeInTheDocument()
   expect(screen.queryByText(/C04 ·/)).not.toBeInTheDocument()
   expect(screen.queryByText(/A05 ·/)).not.toBeInTheDocument()
-  expect(screen.queryByText('Duplicate function')).not.toBeInTheDocument()
+  expect(screen.getByText('Duplicate function')).toBeVisible()
   fireEvent.click(screen.getByLabelText('我已核对说明和职责'))
   expect(screen.getByRole('button', { name: '确认说明并匹配控制' })).toBeEnabled()
 })
@@ -271,32 +255,23 @@ it('omits duplicate context editors while retaining questionnaire facts and save
   expect(screen.getByRole('button', { name: '确认说明并匹配控制' })).toBeEnabled()
 })
 
-it('offers AI expansion for each function and applies the reviewed result to that description only', async () => {
+it('shows the questionnaire function answer read-only without expansion or function editing', () => {
   const value = structuredClone(detail)
-  value.system.draft.proposal = { ...brief, functions: [brief.functions[0], { id: 'F-2', title: 'Second function', description: 'Second authored description', source_blocks: [] }] }
-  const writes: Record<string, unknown>[] = []
-  vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
-    if (url.endsWith('/jobs/function-job')) return new Response(JSON.stringify({ state: 'succeeded', output: { revision: 1, topic: 'function_expansion', original: 'Create tickets\n\nCreate a service request', text: 'Expanded single function', questions: [] } }))
-    const body = JSON.parse(String(options?.body ?? '{}')); writes.push(body)
-    return new Response(JSON.stringify({ ...value, system: { ...value.system, version: 2 }, job_id: 'function-job' }))
-  }))
+  value.system.classification.answers = { system_functions: 'Original function one\nOriginal function two' }
   show(value)
-  expect(writes).toEqual([])
-  expect(screen.getAllByRole('button', { name: 'AI 扩写功能说明' })).toHaveLength(2)
-  fireEvent.click(screen.getAllByRole('button', { name: 'AI 扩写功能说明' })[0])
-  await screen.findByText('Expanded single function')
-  expect(writes[0]).toMatchObject({ kind: 'function_expansion', function_id: 'F-001', mode: 'openrouter' })
-  const fields = screen.getAllByRole('textbox', { name: '功能说明' })
-  expect(fields[0]).toHaveValue('Create a service request')
-  fireEvent.click(screen.getByRole('button', { name: '采纳并替换描述' }))
-  expect(fields[0]).toHaveValue('Expanded single function')
-  expect(fields[1]).toHaveValue('Second authored description')
-  expect(screen.getByLabelText('功能 1')).toHaveValue('Create tickets')
+  const section = document.querySelector('[data-prd-section="04"]')!
+  expect(section).toHaveTextContent('Original function one')
+  expect(section).toHaveTextContent('Original function two')
+  expect(section.querySelector('input, textarea, button')).toBeNull()
+  expect(section).not.toHaveTextContent('Create a service request')
+  expect(screen.queryByRole('button', { name: 'AI 扩写功能说明' })).not.toBeInTheDocument()
+  expect(document.querySelector('[data-source-field="system_functions"]')).toHaveAttribute('data-source-question', 'A05')
 })
 
-it.each(['CONTROL_REVIEW', 'PRD_REVIEW'])('allows per-function AI expansion while reviewing %s', status => {
+it('shows all structured liaison fields in the PRD draft', () => {
   const value = structuredClone(detail)
-  value.system.status = status
+  value.system.classification.answers = { system_owner: ['零售运营'] as unknown as string }
+  value.system.classification.department_contacts = { 零售运营: { name: 'Liaison', organization: 'External company', title: 'Architect', scope: 'Integration scope', contact_method: 'liaison@example.test' } }
   show(value)
-  expect(screen.getByRole('button', { name: 'AI 扩写功能说明' })).toBeEnabled()
+  for (const text of ['Liaison', 'External company', 'Architect', 'Integration scope', 'liaison@example.test']) expect(screen.getByText(text)).toBeVisible()
 })

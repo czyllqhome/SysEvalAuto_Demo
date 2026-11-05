@@ -39,7 +39,11 @@ function Editor({ initial }: { initial: State }) {
     {message && <Notice>{message}</Notice>}{problem && <Notice error>{problem}</Notice>}
     <fieldset disabled={busy}><label>{t('上传 .md 模板', 'Upload .md template')}<input type="file" accept=".md" onChange={e => void upload(e.target.files?.[0])} /></label>
       {data.template ? <><p>{data.template.filename}</p><label>{t('Markdown 模板内容', 'Markdown template content')}<textarea className="prompt-editor" rows={20} value={data.template.content} onChange={e => setData(old => ({ ...old, template: { ...old.template!, content: e.target.value } }))} /></label></> : <p>{t('未配置自定义模板。', 'No custom template configured.')}</p>}
-      <details><summary>{t('可自动填充的字段', 'Supported fields')}</summary><p>{data.slots.map(s => `{{${s}}}`).join(' · ')}</p><p>{t('不认识的占位符转为待确认项；缺少需求或追踪字段时会自动补充，避免遗漏已纳入的安全控制。模板正文不会作为系统指令执行。', 'Unknown placeholders become open questions. Missing requirement and traceability sections are appended to preserve coverage. Template content is not executed as system instructions.')}</p></details>
+      <details><summary>{t('填写与自动填充说明', 'Writing and autofill guide')}</summary>
+        <ol><li>{t('先在系统信息收集中补齐背景、联系人、场景、数据接口和部署信息；对应章节自动填充。', 'Complete background, contacts, scenarios, data, interfaces and deployment in system information; matching sections fill automatically.')}</li>
+          <li>{t('功能需求逐项填写行为和验收条件。未知值保留“待补充”，假设和待确认事项集中记录。', 'Write behavior and acceptance criteria per requirement. Leave unknowns as “To complete” and record assumptions and questions together.')}</li>
+          <li>{t('新版安全章节只展示按域分类的控制内容。实施说明、验收和来源放入附录；已有草稿可应用当前模板形成新修订。', 'The new security chapter shows control content grouped by domain. Implementation details, acceptance and sources belong in appendices. Apply the current template to an existing draft as a new revision.')}</li></ol>
+        <p>{data.slots.map(s => `{{${s}}}`).join(' · ')}</p><p>{t('不认识的占位符转为待确认项；缺少需求或追踪字段时会自动补充，避免遗漏已纳入的安全控制。模板正文不会作为系统指令执行。', 'Unknown placeholders become open questions. Missing requirement and traceability sections are appended to preserve coverage. Template content is not executed as system instructions.')}</p></details>
       <div className="stage-actions"><Button disabled={!data.template} onClick={() => void save(null)} variant="secondary">{t('删除 PRD 模板', 'Delete PRD template')}</Button><Button disabled={!data.template?.content.trim()} onClick={() => void save(data.template)}>{t('保存 PRD 模板', 'Save PRD template')}</Button></div>
     </fieldset></>
 }

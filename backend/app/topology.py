@@ -6,17 +6,19 @@ import re
 from fastapi import Depends, Response
 from sqlalchemy import select
 
-from .db import MlpsEvidence
+from .db import MlpsEvidence, System
 from .domain import DomainError
 
 IMAGE_MIMES = ('image/png', 'image/jpeg', 'image/webp')
 
 
 def snapshot(db, system_id):
+    system = db.get(System, system_id)
+    removed = system.draft.get('removed_mlps_evidence', []) if system else []
     rows = db.execute(select(MlpsEvidence.id, MlpsEvidence.filename, MlpsEvidence.mime, MlpsEvidence.sha256).where(
         MlpsEvidence.system_id == system_id, MlpsEvidence.question == 'network_zones_description',
         MlpsEvidence.mime.in_(IMAGE_MIMES)).order_by(MlpsEvidence.created_at, MlpsEvidence.id))
-    return [dict(row._mapping) for row in rows]
+    return [dict(row._mapping) for row in rows if row.id not in removed]
 
 
 def image(db, system_id, evidence_id):

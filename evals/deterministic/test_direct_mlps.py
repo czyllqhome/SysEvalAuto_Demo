@@ -45,6 +45,29 @@ def test_catalog_is_immutable_idempotent_and_scoped(source_owner):
         assert db.scalar(select(func.count()).select_from(Catalog)) == 1
 
 
+def test_control_list_accepts_chinese_only_domain_labels(source_owner):
+    _, client = source_owner
+    sid = client.post('/api/v1/systems', json={'name': 'Chinese source domains'}).json()['system']['id']
+    command(client, sid, 'classification-confirmations', {'scheme': screening.SCHEME, 'facts': low(), 'frameworks': ['MLPS_LEVEL_2']})
+    command(client, sid, 'context-confirmations', {'context': copy.deepcopy(BRIEF)})
+    response = client.get('/api/v1/controls', params={'system_id': sid})
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data['total'] == 346
+    assert len(data['items']) == 100
+    assert data['domain_labels']
+    assert all(zh and en == zh for zh, en in data['domain_labels'].values())
+    selected = [c for c in current(client, sid)['controls'] if c['included']]
+    assert len(selected) == 135
+    pages = data['items'] + client.get('/api/v1/controls', params={'system_id': sid, 'page': 2}).json()['items']
+    pages += client.get('/api/v1/controls', params={'system_id': sid, 'page': 3}).json()['items']
+    pages += client.get('/api/v1/controls', params={'system_id': sid, 'page': 4}).json()['items']
+    assert {c['id'] for c in selected} <= {c['id'] for c in pages}
+    domain = data['items'][0]['domain']
+    filtered = client.get('/api/v1/controls', params={'system_id': sid, 'domain': domain}).json()
+    assert filtered['items'] and all(c['domain'] == domain for c in filtered['items'])
+
+
 def test_archive_never_becomes_the_active_catalog(source_owner):
     from app.db import LibraryWorkspace, LibraryRelease
     from app.service import current_catalog
@@ -130,7 +153,7 @@ def test_new_prd_template_preserves_source_coverage_and_snapshot(source_owner):
     assert detail['system']['status'] == 'PRD_REVIEW', detail.get('jobs')
     with app.state.sessions() as db:
         prd = db.get(Prd, detail['prd']['id'])
-        assert 'PRD draft' in prd.markdown
+        assert '<!-- syseval:prd-layout-v3 -->' in prd.markdown
         assert len(prd.data['requirements']) == 136
         assert 'Local rule-based draft' in prd.markdown
         assert 'MLPS_level_2_CN.xlsx' in prd.markdown

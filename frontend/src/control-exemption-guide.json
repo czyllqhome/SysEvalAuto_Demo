@@ -1,0 +1,282 @@
+[
+  {
+    "id": "cloud-physical",
+    "question_key": "deployment_model",
+    "question_id": "B02",
+    "source_id": "B05",
+    "question": {
+      "zh": "采用何种部署方式？",
+      "en": "Deployment model"
+    },
+    "trigger": {
+      "zh": "选择专有云、公有云、混合云或 SaaS 中任意一项；同时选择本地部署仍按云处理。",
+      "en": "Select any of Private cloud, Public cloud, Hybrid cloud or SaaS. Cloud takes priority when local deployment is also selected."
+    },
+    "effect": {
+      "zh": "安全物理环境域的同级通用控制豁免；纳入同级云计算安全扩展要求。",
+      "en": "Exempt same-level general physical-environment controls; include same-level cloud security extensions."
+    },
+    "references": {
+      "1": "安全物理环境",
+      "2": "安全物理环境",
+      "3": "安全物理环境"
+    },
+    "examples": [
+      [
+        "专有云"
+      ],
+      [
+        "公有云"
+      ],
+      [
+        "混合云"
+      ],
+      [
+        "SaaS"
+      ],
+      [
+        "本地数据中心",
+        "公有云"
+      ]
+    ],
+    "outcome": "exempted",
+    "domain": "安全物理环境"
+  },
+  {
+    "id": "local-cloud",
+    "question_key": "deployment_model",
+    "question_id": "B02",
+    "source_id": "B05",
+    "question": {
+      "zh": "采用何种部署方式？",
+      "en": "Deployment model"
+    },
+    "trigger": {
+      "zh": "明确选择本地数据中心、托管机房或门店/仓库本地部署，且未选择任何云选项。",
+      "en": "Select On-premises data center, Colocation or Store/warehouse local deployment, with no cloud option."
+    },
+    "effect": {
+      "zh": "同级云计算安全扩展要求不适用；保留同级安全物理环境控制。",
+      "en": "Same-level cloud security extensions are not applicable; retain same-level physical-environment controls."
+    },
+    "references": {
+      "1": "云计算安全扩展要求",
+      "2": "云计算安全扩展要求",
+      "3": "云计算安全扩展要求"
+    },
+    "examples": [
+      [
+        "本地数据中心"
+      ],
+      [
+        "托管机房"
+      ],
+      [
+        "门店或仓库本地部署"
+      ]
+    ],
+    "outcome": "inapplicable",
+    "domain": "云计算安全扩展要求"
+  },
+  {
+    "id": "development-9.4",
+    "question_key": "development_models",
+    "question_id": "A08",
+    "source_id": "A08",
+    "question": {
+      "zh": "软件由哪些方式交付或开发（含二次开发，可多选）？",
+      "en": "How is software delivered or developed, including customization?"
+    },
+    "trigger": {
+      "zh": "已明确选择交付方式，但不含“自行开发”，也不含“不确定”。",
+      "en": "Confirm delivery modes without in-house development and without Unknown."
+    },
+    "effect": {
+      "zh": "自行开发（含二次开发）对应通用控制豁免。采购成品或 SaaS 且无二次开发时，两类开发通用控制均豁免。",
+      "en": "Controls for in-house development, including customization, are general controls exempted by scope. Purchased software/SaaS without customization exempts both general development-control groups."
+    },
+    "references": {
+      "2": "7.1.9.4-a)～g)",
+      "3": "8.1.9.4-a)～g)"
+    },
+    "examples": [
+      [
+        "外包开发"
+      ],
+      [
+        "采购成品或SaaS"
+      ]
+    ],
+    "outcome": "exempted",
+    "domain": null
+  },
+  {
+    "id": "development-9.5",
+    "question_key": "development_models",
+    "question_id": "A08",
+    "source_id": "A08",
+    "question": {
+      "zh": "软件由哪些方式交付或开发（含二次开发，可多选）？",
+      "en": "How is software delivered or developed, including customization?"
+    },
+    "trigger": {
+      "zh": "已明确选择交付方式，但不含“外包开发”，也不含“不确定”。",
+      "en": "Confirm delivery modes without outsourced development and without Unknown."
+    },
+    "effect": {
+      "zh": "外包开发（含二次开发）对应通用控制豁免。采购成品或 SaaS 且无二次开发时，两类开发通用控制均豁免。",
+      "en": "Controls for outsourced development, including customization, are general controls exempted by scope. Purchased software/SaaS without customization exempts both general development-control groups."
+    },
+    "references": {
+      "2": "7.1.9.5-a)～g)",
+      "3": "8.1.9.5-a)～g)"
+    },
+    "examples": [
+      [
+        "自行开发"
+      ],
+      [
+        "采购成品或SaaS"
+      ]
+    ],
+    "outcome": "exempted",
+    "domain": null
+  },
+  {
+    "id": "outsourced_operations",
+    "question_key": "outsourced_operations",
+    "question_id": "B07",
+    "source_id": "B11",
+    "question": {
+      "zh": "是否使用外包运维服务？",
+      "en": "Are operations outsourced?"
+    },
+    "trigger": {
+      "zh": "回答“否”，确认本次评估责任范围内不涉及该活动。",
+      "en": "Answer No, confirming the activity is outside this assessment’s responsibility scope."
+    },
+    "effect": {
+      "zh": "外包运维管理控制。已确认不涉及时，对应通用控制按范围规则豁免。",
+      "en": "Outsourced operations controls. Confirmed out-of-scope activities exempt the corresponding general controls."
+    },
+    "references": {
+      "2": "7.1.10.14-*",
+      "3": "8.1.10.14-*"
+    },
+    "examples": [
+      "否"
+    ],
+    "outcome": "exempted",
+    "domain": null
+  },
+  {
+    "id": "physical_media",
+    "question_key": "physical_media",
+    "question_id": "B08",
+    "source_id": "B12",
+    "question": {
+      "zh": "本次评估责任范围内是否涉及实体存储介质管理？",
+      "en": "Does the assessment scope include physical storage-media management?"
+    },
+    "trigger": {
+      "zh": "回答“否”，确认本次评估责任范围内不涉及该活动。",
+      "en": "Answer No, confirming the activity is outside this assessment’s responsibility scope."
+    },
+    "effect": {
+      "zh": "实体存储介质管理对应控制。已确认不涉及时，对应通用控制按范围规则豁免。",
+      "en": "Physical storage-media management controls. Confirmed out-of-scope activities exempt the corresponding general controls."
+    },
+    "references": {
+      "1": "6.1.9.2",
+      "2": "7.1.10.3-a)",
+      "3": "8.1.10.3-a)"
+    },
+    "examples": [
+      "否"
+    ],
+    "outcome": "exempted",
+    "domain": null
+  },
+  {
+    "id": "physical_media_transport",
+    "question_key": "physical_media_transport",
+    "question_id": "B09",
+    "source_id": "B13",
+    "question": {
+      "zh": "是否涉及实体存储介质的线下运输或交付？",
+      "en": "Are physical storage media transported or delivered?"
+    },
+    "trigger": {
+      "zh": "回答“否”，确认本次评估责任范围内不涉及该活动。",
+      "en": "Answer No, confirming the activity is outside this assessment’s responsibility scope."
+    },
+    "effect": {
+      "zh": "实体介质物理传输、打包、交付等对应控制。已确认不涉及时，对应通用控制按范围规则豁免。",
+      "en": "Physical media transport, packaging and delivery controls. Confirmed out-of-scope activities exempt the corresponding general controls."
+    },
+    "references": {
+      "2": "7.1.10.3-b)",
+      "3": "8.1.10.3-b)"
+    },
+    "examples": [
+      "否"
+    ],
+    "outcome": "exempted",
+    "domain": null
+  },
+  {
+    "id": "facility_management",
+    "question_key": "facility_management",
+    "question_id": "B10",
+    "source_id": "B14",
+    "question": {
+      "zh": "本次评估责任范围内是否承担机房安全管理（含需向云商取证的责任）？",
+      "en": "Does the assessment include facility-security responsibilities, including provider evidence?"
+    },
+    "trigger": {
+      "zh": "回答“否”，确认本次评估责任范围内不涉及该活动。",
+      "en": "Answer No, confirming the activity is outside this assessment’s responsibility scope."
+    },
+    "effect": {
+      "zh": "安全运维管理域中的机房环境管理控制；与安全物理环境域的云部署豁免分别判定。已确认不涉及时，对应通用控制按范围规则豁免。",
+      "en": "Facility-management controls in security operations; evaluated separately from cloud-deployment exemptions of the physical-environment domain. Confirmed out-of-scope activities exempt the corresponding general controls."
+    },
+    "references": {
+      "1": "6.1.9.1-a)、6.1.9.1-b)",
+      "2": "7.1.10.1-a)、7.1.10.1-b)",
+      "3": "8.1.10.1-a)、8.1.10.1-b)"
+    },
+    "examples": [
+      "否"
+    ],
+    "outcome": "exempted",
+    "domain": null
+  },
+  {
+    "id": "physical_visitors",
+    "question_key": "physical_visitors",
+    "question_id": "B11",
+    "source_id": "B15",
+    "question": {
+      "zh": "本次评估责任范围内是否涉及外部人员访问受控物理区域？",
+      "en": "Does the assessment scope include external visitors to controlled physical areas?"
+    },
+    "trigger": {
+      "zh": "回答“否”，确认本次评估责任范围内不涉及该活动。",
+      "en": "Answer No, confirming the activity is outside this assessment’s responsibility scope."
+    },
+    "effect": {
+      "zh": "外部人员访问受控物理区域的对应控制。已确认不涉及时，对应通用控制按范围规则豁免。",
+      "en": "External access to controlled physical areas. Confirmed out-of-scope activities exempt the corresponding general controls."
+    },
+    "references": {
+      "2": "7.1.8.4-a)",
+      "3": "8.1.8.4-a)"
+    },
+    "examples": [
+      "否"
+    ],
+    "outcome": "exempted",
+    "domain": null
+  }
+]

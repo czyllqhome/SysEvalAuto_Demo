@@ -84,6 +84,25 @@ def selections(db, system, *, included_only=False):
     return list(db.scalars(statement.order_by(Selection.id)))
 
 
+def requirement_domains(prd, controls):
+    """Display-only domain labels from the published round's control snapshots."""
+    by_id = {c['id']: c for c in controls}
+    result = {}
+    for requirement in prd.data['requirements']:
+        labels = []
+        for control_id in requirement['source_control_ids']:
+            control = by_id.get(control_id)
+            if not control:
+                continue
+            source = control.get('metadata', {}).get('source', {})
+            label = (source.get('languages', {}).get('zh', {}).get('fields', {}).get('security_domain')
+                     or source.get('fields', {}).get('security_domain') or control.get('domain'))
+            if label and label not in labels:
+                labels.append(label)
+        result[requirement['id']] = labels
+    return result
+
+
 def selection_view(selection):
     return {**selection.snapshot, "selection_id": selection.id, "included": selection.included,
             "reason": selection.reason, "origin": selection.origin}
@@ -267,6 +286,9 @@ def match_profile_controls(db, system):
 
 
 def job_input(db, system, kind):
+    if kind.startswith('delivery_evidence:'):
+        from .delivery_ai import job_source
+        return job_source(db, system, kind.split(':', 1)[1])
     if isinstance(kind, str) and kind.startswith('function_expansion:'):
         require_state(system, 'DRAFT', 'CLASSIFYING', 'CONTEXT_REVIEW', 'CONTROL_REVIEW', 'PRD_REVIEW')
         context = system.draft.get('proposal') or system.context
@@ -315,12 +337,15 @@ def job_input(db, system, kind):
             raise DomainError("STATE_CONFLICT", 409)
         return {"round_id": round_.id, "prd": db.get(Prd, round_.prd_id).data,
                 "context": round_.snapshot["context"], "answers": db.get(Submission, round_.submitted_id).data,
+                "classification": round_.snapshot.get('classification', {}),
+                "questionnaire": round_.snapshot.get('questionnaire', {}),
+                "controls": round_.snapshot.get('controls', []),
                 "negotiation_instructions": round_.snapshot.get("instructions", "")}
     raise DomainError("INVALID_JOB_TYPE")
 
 
 def schedule(db, system, kind, mode, language, *, reparse=False):
-    if isinstance(kind, str) and (kind.startswith(('narrative_refinement:', 'function_expansion:')) or kind == 'prd_import_extraction') and mode != 'openrouter':
+    if isinstance(kind, str) and (kind.startswith(('narrative_refinement:', 'function_expansion:', 'delivery_evidence:')) or kind == 'prd_import_extraction') and mode != 'openrouter':
         raise DomainError('INVALID_GENERATION_MODE')
     if mode not in ("local", "openrouter") or language not in ("zh", "en"):
         raise DomainError("INVALID_GENERATION_MODE")
@@ -343,7 +368,7 @@ def schedule(db, system, kind, mode, language, *, reparse=False):
                for item in selections(db, system)):
             raise DomainError("APPLICABILITY_REVIEW_REQUIRED", 409)
     elif kind == "impact_analysis":
-        require_state(system, "ANALYZING")
+        require_state(system, "ANALYZING", "RESULT_REVIEW", "NEGOTIATING")
     used = sum(job.usage.get("tokens", 0) for job in db.scalars(select(Job).where(Job.system_id == system.id)))
     if used >= int(os.getenv("SYSEVAL_SYSTEM_TOKEN_BUDGET", "500000")):
         raise DomainError("MODEL_BUDGET_EXCEEDED", 409)
@@ -372,11 +397,16 @@ def schedule(db, system, kind, mode, language, *, reparse=False):
     db.flush()
     if kind == "prd_generation":
         system.status = "PRD_GENERATING"
+    elif kind == 'impact_analysis':
+        system.status = 'ANALYZING'
     return job
 
 
 def publish_job(db, system, job, output):
-    if job.kind == 'prd_import_extraction':
+    if job.kind.startswith('delivery_evidence:'):
+        from .delivery_ai import validate_output
+        job.output = validate_output(output, job.input)
+    elif job.kind == 'prd_import_extraction':
         from .prd_imports import publish
         publish(db, system, job, output)
     elif job.kind.startswith(('narrative_refinement:', 'function_expansion:')):
@@ -412,7 +442,8 @@ def publish_job(db, system, job, output):
         job.output = {"prd_id": prd.id}
     elif job.kind == "impact_analysis":
         evidence = redact_source(job.input["answers"]) if job.mode == "openrouter" else job.input["answers"]
-        data = validate_report(output, job.input["prd"]["requirements"], evidence)
+        data = validate_report(output, job.input["prd"]["requirements"], evidence,
+                               contextual_source=redact_source(job.input) if job.mode == 'openrouter' else None)
         round_ = db.get(SupplierRound, job.input["round_id"])
         report = Report(system_id=system.id, submission_id=round_.submitted_id,
                         data=data, mode=job.mode, decisions={}, reviewed=False)
@@ -442,13 +473,20 @@ def save_submission(db, system, round_, user, payload):
     round_.status, round_.submitted_id = "submitted", submission.id
     round_.draft = validated
     round_.version += 1
-    system.status = "ANALYZING"
-    return schedule(db, system, "impact_analysis", payload.get("mode", "local"), payload.get("language", "zh"))
+    # Publication only records commitments. The customer explicitly starts any
+    # subsequent rule/model review; supplier payloads cannot trigger model work.
+    system.status, system.report_id = "RESULT_REVIEW", None
+    return submission
 
 
 def review_report(db, system, payload):
     require_state(system, "RESULT_REVIEW", "NEGOTIATING")
-    report = db.get(Report, system.report_id)
+    report = db.get(Report, system.report_id) if system.report_id else None
+    if not report:
+        raise DomainError("REVIEW_INCOMPLETE")
+    round_ = db.get(SupplierRound, system.round_id) if system.round_id else None
+    if not round_ or report.submission_id != round_.submitted_id:
+        raise DomainError("VERSION_CONFLICT", 409)
     decisions = payload.get("decisions", {})
     expected = {finding["id"] for finding in report.data["findings"]}
     if expected != set(decisions):
@@ -459,9 +497,18 @@ def review_report(db, system, payload):
     if not str(payload.get("exception_reason", "")).strip():
         raise DomainError("EXCEPTION_REVIEW_REQUIRED")
     from .source_risk import assessment
-    blocked = set(assessment(db, system)['blocking_requirements'])
-    if any(f['requirement_id'] in blocked and decisions[f['id']]['decision'] == 'accept' for f in report.data['findings']):
-        raise DomainError('HIGH_RISK_CONTROL_UNRESOLVED', 409)
+    source_review = assessment(db, system)
+    blocked = set(source_review['blocking_requirements'])
+    clarification = set(source_review.get('clarification_requirements', []))
+    for finding in report.data['findings']:
+        decision = decisions[finding['id']]
+        if decision['decision'] != 'accept':
+            continue
+        if finding['requirement_id'] in clarification:
+            if decision.get('owner_reviewed') is not True:
+                raise DomainError('HIGH_RISK_CONTROL_UNRESOLVED', 409)
+        elif finding['requirement_id'] in blocked:
+            raise DomainError('HIGH_RISK_CONTROL_UNRESOLVED', 409)
     report.decisions = {**decisions, "_exceptions": {"reason": payload["exception_reason"]}}
     report.reviewed = True
     system.status = "NEGOTIATING" if any(d["decision"] == "changes" for d in decisions.values()) else "RESULT_REVIEW"
@@ -534,7 +581,9 @@ def finalize(db, system, baseline, user):
 
 
 def system_view(db, system, user):
+    from .supplier_review import summary as supplier_summary
     from .source_risk import assessment as source_assessment
+    from .source_risk import high_source_requirements
     from .assessment_creation import profile_view
     info = {"id": system.id, "name": system.name, "status": system.status, "version": system.version,
             "revision": system.revision, "updated_at": system.updated_at, "created_at": system.created_at,
@@ -565,16 +614,21 @@ def system_view(db, system, user):
     if user.role == "vendor":
         jobs = [job for job in jobs if job.kind == "impact_analysis" and round_ and job.input.get("round_id") == round_.id]
     latest_job = jobs[0] if jobs else None
+    prd_controls = (round_.snapshot.get('controls', []) if round_ and prd and round_.prd_id == prd.id
+                    else [item.snapshot for item in selections(db, system)] if prd else [])
     return {"system": info, "permissions": sorted(access.capabilities(db, user, system)),
             "job": {"id": latest_job.id, "state": latest_job.state, "kind": latest_job.kind,
                     "mode": latest_job.mode, "error": latest_job.error, "attempts": latest_job.attempts} if latest_job else None,
             "controls": [selection_view(item) for item in selections(db, system)] if user.role != "vendor" else [],
             "prd": {"id": prd.id, "data": prd.data, "approved": prd.approved,
-                    "language": prd.language, "mode": prd.mode, "content_hash": prd.content_hash} if prd else None,
+                    "language": prd.language, "mode": prd.mode, "content_hash": prd.content_hash,
+                    "requirement_domains": requirement_domains(prd, prd_controls),
+                    "high_risk_requirements": high_source_requirements(prd.data, prd_controls)} if prd else None,
             "round": {"id": round_.id, "status": round_.status, "version": round_.version,
                       "draft": round_.draft, "submitted_id": round_.submitted_id,
                       "instructions": round_.snapshot.get("instructions", ""),
                       "supplier_org_id": round_.supplier_org_id} if round_ else None,
+            "supplier_review": supplier_summary(db, round_),
             "report": {"id": report.id, "data": report.data, "mode": report.mode,
                        "mlps3_major_risk": mlps3_major_risk(db, system, prd, report),
                        "source_assessment": source_assessment(db, system),

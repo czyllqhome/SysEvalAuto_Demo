@@ -64,8 +64,8 @@ it('records insufficient evidence explicitly without pretending supplier claims 
 
 it('routes current-state stages independently and does not fall back to supplier for unknown states', () => {
   expect(stageTab('DRAFT')).toBe('classification')
-  expect(stageTab('CONTEXT_REVIEW', false, false)).toBe('brief')
-  expect(stageTab('CONTEXT_REVIEW', false, true)).toBe('brief')
+  expect(stageTab('CONTEXT_REVIEW', false, false)).toBe('information')
+  expect(stageTab('CONTEXT_REVIEW', false, true)).toBe('information')
   expect(stageTab('REMEDIATING')).toBe('existing')
   expect(stageTab('ACCEPTED_RISKS')).toBe('existing')
   expect(stageTab('UNKNOWN')).toBe('unavailable')

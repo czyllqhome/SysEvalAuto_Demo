@@ -272,12 +272,13 @@
     "example_en": "Identify the responsible entity and the roles of brand business teams, group IT and suppliers."
   },
   {
-    "id": "B03",
+    "id": "RETIRED-B03",
     "key": "independent_business",
+    "retired": true,
     "zh": "这个系统是否负责一项可以单独说明的业务或服务（如会员管理、库存查询、统一登录）？",
     "en": "Does this system provide a distinct business function or service, such as membership management, inventory lookup or single sign-on?",
     "hint": "boolean_3；需说明与其他系统的区别",
-    "rule": "M（边界校验）",
+    "rule": "",
     "kind": "enum",
     "options": [
       "是",
@@ -2256,5 +2257,163 @@
     "example_zh": "填写经统计或业务负责人核实的数值、单位、时间范围及估计依据；没有数据时标记不确定。",
     "example_en": "Provide verified figures, units, period and estimation basis; mark unavailable information unknown.",
     "retired": true
+  },
+  {
+    "id": "A08",
+    "key": "development_models",
+    "zh": "软件由哪些方式交付或开发（含二次开发，可多选）？",
+    "en": "How is software delivered or developed, including customization?",
+    "hint": "按实际责任边界填写；由供应商承担但仍需取证的职责选择是。",
+    "hint_en": "Use the actual responsibility boundary; choose Yes for provider responsibilities requiring evidence.",
+    "rule": "E",
+    "kind": "multi",
+    "options": [
+      "自行开发",
+      "外包开发",
+      "采购成品或SaaS",
+      "不确定"
+    ],
+    "options_en": [
+      "In-house development",
+      "Outsourced development",
+      "Purchased software or SaaS",
+      "Unknown"
+    ],
+    "required": false,
+    "source_id": "development_models",
+    "example_zh": "示例仅供参考，应按实际情况确认。",
+    "example_en": "Verify the example against actual facts.",
+    "policy_hint_zh": "用于匹配控制，不改变系统等级。仅确认不涉及的活动可以豁免；供应商承担但仍需履责取证的活动应保留，不确定则待确认。",
+    "policy_hint_en": "Controls only; no grading effect. Exclude only confirmed out-of-scope activities. Retain provider assurance responsibilities; unknowns remain pending."
+  },
+  {
+    "id": "B11",
+    "key": "outsourced_operations",
+    "zh": "是否使用外包运维服务？",
+    "en": "Are operations outsourced?",
+    "hint": "按实际责任边界填写；由供应商承担但仍需取证的职责选择是。",
+    "hint_en": "Use the actual responsibility boundary; choose Yes for provider responsibilities requiring evidence.",
+    "rule": "E",
+    "kind": "enum",
+    "options": [
+      "是",
+      "否",
+      "不确定"
+    ],
+    "options_en": [
+      "Yes",
+      "No",
+      "Unknown"
+    ],
+    "required": false,
+    "source_id": "outsourced_operations",
+    "example_zh": "示例仅供参考，应按实际情况确认。",
+    "example_en": "Verify the example against actual facts.",
+    "policy_hint_zh": "用于匹配控制，不改变系统等级。仅确认不涉及的活动可以豁免；供应商承担但仍需履责取证的活动应保留，不确定则待确认。",
+    "policy_hint_en": "Controls only; no grading effect. Exclude only confirmed out-of-scope activities. Retain provider assurance responsibilities; unknowns remain pending."
+  },
+  {
+    "id": "B12",
+    "key": "physical_media",
+    "zh": "本次评估责任范围内是否涉及实体存储介质管理？",
+    "en": "Does the assessment scope include physical storage-media management?",
+    "hint": "按实际责任边界填写；由供应商承担但仍需取证的职责选择是。",
+    "hint_en": "Use the actual responsibility boundary; choose Yes for provider responsibilities requiring evidence.",
+    "rule": "E",
+    "kind": "enum",
+    "options": [
+      "是",
+      "否",
+      "不确定"
+    ],
+    "options_en": [
+      "Yes",
+      "No",
+      "Unknown"
+    ],
+    "required": false,
+    "source_id": "physical_media",
+    "example_zh": "示例仅供参考，应按实际情况确认。",
+    "example_en": "Verify the example against actual facts.",
+    "policy_hint_zh": "用于匹配控制，不改变系统等级。仅确认不涉及的活动可以豁免；供应商承担但仍需履责取证的活动应保留，不确定则待确认。",
+    "policy_hint_en": "Controls only; no grading effect. Exclude only confirmed out-of-scope activities. Retain provider assurance responsibilities; unknowns remain pending."
+  },
+  {
+    "id": "B13",
+    "key": "physical_media_transport",
+    "zh": "是否涉及实体存储介质的线下运输或交付？",
+    "en": "Are physical storage media transported or delivered?",
+    "hint": "按实际责任边界填写；由供应商承担但仍需取证的职责选择是。",
+    "hint_en": "Use the actual responsibility boundary; choose Yes for provider responsibilities requiring evidence.",
+    "rule": "E",
+    "kind": "enum",
+    "options": [
+      "是",
+      "否",
+      "不确定"
+    ],
+    "options_en": [
+      "Yes",
+      "No",
+      "Unknown"
+    ],
+    "required": false,
+    "source_id": "physical_media_transport",
+    "example_zh": "示例仅供参考，应按实际情况确认。",
+    "example_en": "Verify the example against actual facts.",
+    "policy_hint_zh": "用于匹配控制，不改变系统等级。仅确认不涉及的活动可以豁免；供应商承担但仍需履责取证的活动应保留，不确定则待确认。",
+    "policy_hint_en": "Controls only; no grading effect. Exclude only confirmed out-of-scope activities. Retain provider assurance responsibilities; unknowns remain pending."
+  },
+  {
+    "id": "B14",
+    "key": "facility_management",
+    "zh": "本次评估责任范围内是否承担机房安全管理（含需向云商取证的责任）？",
+    "en": "Does the assessment include facility-security responsibilities, including provider evidence?",
+    "hint": "按实际责任边界填写；由供应商承担但仍需取证的职责选择是。",
+    "hint_en": "Use the actual responsibility boundary; choose Yes for provider responsibilities requiring evidence.",
+    "rule": "E",
+    "kind": "enum",
+    "options": [
+      "是",
+      "否",
+      "不确定"
+    ],
+    "options_en": [
+      "Yes",
+      "No",
+      "Unknown"
+    ],
+    "required": false,
+    "source_id": "facility_management",
+    "example_zh": "示例仅供参考，应按实际情况确认。",
+    "example_en": "Verify the example against actual facts.",
+    "policy_hint_zh": "用于匹配控制，不改变系统等级。仅确认不涉及的活动可以豁免；供应商承担但仍需履责取证的活动应保留，不确定则待确认。",
+    "policy_hint_en": "Controls only; no grading effect. Exclude only confirmed out-of-scope activities. Retain provider assurance responsibilities; unknowns remain pending."
+  },
+  {
+    "id": "B15",
+    "key": "physical_visitors",
+    "zh": "本次评估责任范围内是否涉及外部人员访问受控物理区域？",
+    "en": "Does the assessment scope include external visitors to controlled physical areas?",
+    "hint": "按实际责任边界填写；由供应商承担但仍需取证的职责选择是。",
+    "hint_en": "Use the actual responsibility boundary; choose Yes for provider responsibilities requiring evidence.",
+    "rule": "E",
+    "kind": "enum",
+    "options": [
+      "是",
+      "否",
+      "不确定"
+    ],
+    "options_en": [
+      "Yes",
+      "No",
+      "Unknown"
+    ],
+    "required": false,
+    "source_id": "physical_visitors",
+    "example_zh": "示例仅供参考，应按实际情况确认。",
+    "example_en": "Verify the example against actual facts.",
+    "policy_hint_zh": "用于匹配控制，不改变系统等级。仅确认不涉及的活动可以豁免；供应商承担但仍需履责取证的活动应保留，不确定则待确认。",
+    "policy_hint_en": "Controls only; no grading effect. Exclude only confirmed out-of-scope activities. Retain provider assurance responsibilities; unknowns remain pending."
   }
 ]

@@ -150,5 +150,29 @@
   "available_workaround": [
     "人工及其他系统替代机制",
     "Manual and alternative system workarounds"
+  ],
+  "development_models": [
+    "软件开发与交付方式",
+    "Software development and delivery"
+  ],
+  "outsourced_operations": [
+    "外包运维安排",
+    "Outsourced operations"
+  ],
+  "physical_media": [
+    "实体介质管理范围",
+    "Physical media scope"
+  ],
+  "physical_media_transport": [
+    "实体介质运输安排",
+    "Physical media transport"
+  ],
+  "facility_management": [
+    "机房安全管理责任",
+    "Facility security responsibilities"
+  ],
+  "physical_visitors": [
+    "受控区域现场访问",
+    "Physical access to controlled areas"
   ]
 }

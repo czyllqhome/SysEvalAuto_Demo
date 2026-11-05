@@ -23,7 +23,7 @@ def authorize(db, user, batch, action='read'):
         if (user.org_id != batch.supplier_org_id or batch.supplier_user_id and user.id != batch.supplier_user_id
                 or not access.supplier_project_access(db, user, system)):
             raise DomainError('NOT_FOUND', 404)
-        if action not in ('read', 'upload', 'draft', 'submit'):
+        if action not in ('read', 'upload', 'draft', 'submit', 'analyze'):
             raise DomainError('FORBIDDEN', 403)
     else:
         caps = access.capabilities(db, user, system)
@@ -87,8 +87,10 @@ def initialize(db, user, system, body):
         validate_confirmations(confirmations, baseline.content_hash, ('customer', 'supplier'))
         payload = baseline.payload
         requirements = {r['id']: r for r in payload['prd']['requirements']}
-        definitions = [(f['id'], {'finding': f, 'requirement': requirements[f['requirement_id']], 'report_id': payload['report_id']},
-                        requirements[f['requirement_id']]['acceptance_criteria']) for f in payload['report']['findings']]
+        definitions = [(r['id'], {'finding': {'title': r['title']}, 'requirement': r,
+                                  'commitment': payload['answers'][r['id']], 'report_id': payload['report_id']},
+                        r['acceptance_criteria']) for r in requirements.values()
+                       if payload['answers'][r['id']]['implementation_status'] in ('yes', 'partial')]
         source_id, source_hash, supplier_org, supplier_user = baseline.id, baseline.content_hash, payload['supplier_org_id'], None
         snapshot = {'baseline_id': baseline.id, 'source_hash': source_hash}
     elif kind == 'plan':
@@ -137,7 +139,10 @@ def item_view(db, item):
     submissions = []
     for sub in db.scalars(select(DeliverySubmission).where(DeliverySubmission.item_id == item.id).order_by(DeliverySubmission.round_no)):
         review = db.scalar(select(DeliveryReview).where(DeliveryReview.submission_id == sub.id))
+        from .db import Job
+        job = db.scalar(select(Job).where(Job.kind == 'delivery_evidence:' + sub.id).order_by(Job.created_at.desc()))
         submissions.append({'id': sub.id, 'round_no': sub.round_no, 'payload': sub.payload, 'manifest_hash': sub.manifest_hash,
+                            'ai': {'id': job.id, 'state': job.state, 'error': job.error, 'output': job.output if job.state == 'succeeded' else None} if job else None,
                             'created_at': sub.created_at, 'review': {**review.data, 'actor_id': review.actor_id, 'created_at': review.created_at} if review else None})
     return {'id': item.id, 'batch_id': item.batch_id, 'source_id': item.source_id, 'snapshot': item.snapshot,
             'criteria': item.criteria, 'draft': item.draft, 'version': item.version, 'status': item.status,
@@ -149,7 +154,7 @@ def batch_view(db, user, batch, include_items=True):
     system = authorize(db, user, batch)
     rows = items(db, batch)
     actions = ['read']
-    for action in ('review', 'upload', 'complete'):
+    for action in ('review', 'upload', 'complete', 'analyze'):
         try:
             authorize(db, user, batch, action)
             actions.append(action)
@@ -252,9 +257,33 @@ def submit(db, user, batch, item, body):
         payload['development_baseline_id'] = development.id
         payload['development_baseline_hash'] = development.content_hash
     count = db.scalar(select(func.count()).select_from(DeliverySubmission).where(DeliverySubmission.item_id == item.id))
-    db.add(DeliverySubmission(item_id=item.id, round_no=count + 1, actor_id=user.id, payload=payload, manifest_hash=digest(payload)))
+    submission = DeliverySubmission(item_id=item.id, round_no=count + 1, actor_id=user.id, payload=payload, manifest_hash=digest(payload))
+    db.add(submission)
     item.status = 'IN_REVIEW'
     touch(batch, item)
+    db.flush()
+    from .ai_settings import configured
+    if configured(db, batch.org_id):
+        try:
+            analyze(db, batch, item, submission, body)
+        except DomainError as exc:
+            # Evidence submission remains durable even when AI is unavailable/budget-limited.
+            audit(db, user, batch, 'ai_not_queued', {'code': exc.code, 'submission_id': submission.id})
+
+
+def analyze(db, batch, item, submission, body):
+    from . import service
+    from .db import Job
+    source(db, batch)
+    if item.id != submission.item_id:
+        raise DomainError('NOT_FOUND', 404)
+    kind = 'delivery_evidence:' + submission.id
+    system = db.get(System, batch.system_id)
+    current = service.job_input(db, system, kind)
+    prior = db.scalar(select(Job).where(Job.kind == kind, Job.source_hash == digest(current), Job.state == 'succeeded'))
+    if prior:
+        return
+    service.schedule(db, system, kind, 'openrouter', body.get('language', 'zh'))
 
 
 def review(db, user, batch, item, submission, body):

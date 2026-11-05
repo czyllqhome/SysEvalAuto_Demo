@@ -10,7 +10,7 @@ export const statuses: Record<string, Pair> = {
   DRAFT: ['草稿', 'Draft'], CLASSIFYING: ['分级中', 'Classifying'], CONTEXT_REVIEW: ['应用说明审查', 'Brief review'],
   CONTROL_REVIEW: ['控制条目审查', 'Control review'], PRD_GENERATING: ['PRD 生成中', 'Generating PRD'],
   PRD_REVIEW: ['PRD 审查', 'PRD review'], VENDOR_FILLING: ['供应商填写', 'Supplier response'],
-  ANALYZING: ['影响分析中', 'Analyzing'], RESULT_REVIEW: ['评估结果审查', 'Impact review'],
+  ANALYZING: ['影响分析中', 'Analyzing'], RESULT_REVIEW: ['负责人复核', 'Owner review'],
   NEGOTIATING: ['协商中', 'Negotiating'], FINAL_CONFIRMATION: ['双方确认', 'Joint confirmation'],
   PENDING_DEVELOPMENT: ['待开发', 'Ready for development'], ROUND_CLOSED: ['历史轮次', 'Previous round'],
 }
@@ -37,7 +37,7 @@ export const errors: Record<string, Pair> = {
   CONTROL_COVERAGE_INCOMPLETE: ['请核验全部适用控制。', 'Verify every applicable control.'],
   VERIFICATION_INCOMPLETE: ['仍有未评估项或适用性待确认项。', 'Some controls remain unassessed or have unresolved applicability.'],
   LIMITATION_REVIEW_REQUIRED: ['请记录证据不足的限制及跟进责任。', 'Record limitations and accountable follow-up for missing evidence.'],
-  HIGH_RISK_CONTROL_UNRESOLVED: ['High 风险控制尚未完整承诺实施，不能接受为通过或确认开发基线；请要求供应商修订。', 'High-risk controls are unresolved. Request supplier revisions before accepting or confirming the development baseline.'],
+  HIGH_RISK_CONTROL_UNRESOLVED: ['来源 High 项尚需 AI 情境风险分析或补证；残余风险高或事实不足时不能接受及冻结基线。', 'Source-rated High items need contextual AI assessment or evidence. High or unknown residual risk blocks acceptance and baseline freezing.'],
   RISK_REVIEW_REQUIRED: ['请评审差距的影响、可能性与风险理由。', 'Review gap impact, likelihood and risk rationale.'],
   GAP_ALREADY_ASSIGNED: ['此差距已关联整改计划，请修订原计划。', 'This gap already has a remediation plan. Revise that plan.'],
   SUPPLIER_CHANGE_REQUIRES_REVIEW: ['不能通过计划修订移除或替换已指定供应商。', 'Plan revision cannot remove or replace the assigned supplier.'],

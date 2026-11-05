@@ -3,8 +3,8 @@
   "source_system_id": "86a91743-aaf2-4224-b8b7-5ebab6773820",
   "source_system_version": 21,
   "captured_at": "2026-11-03T14:18:27.319937+00:00",
-  "visible_question_count": 39,
-  "schema_profile": "AmerSports-2.14",
+  "visible_question_count": 44,
+  "schema_profile": "AmerSports-2.18",
   "template": {
     "answers": {
       "system_name": "户外运动与产品介绍AI客服",
@@ -32,7 +32,6 @@
       "system_functions": "1. 产品信息查询，包括运动服装、鞋类、户外装备等产品的功能、材质及使用说明。\n2. 根据用户需求提供运动装备选择建议及产品推荐。\n3. 提供徒步、登山、滑雪、越野跑等户外运动的基础知识和装备使用建议。\n4. 回答产品保养、使用方法及常见问题。\n5. 通过自然语言交互，为用户提供智能化信息检索与问答服务。",
       "system_scenarios": "用户通过网页访问 AI 客服助手，询问某款户外装备的功能、适用环境、使用方式，或咨询户外活动所需的装备建议。系统通过 AI 模型结合产品知识库生成答复。\n\n系统主要提供信息咨询服务，不直接处理在线支付、订单交易或物流管理业务。",
       "security_responsible_entity": "是",
-      "independent_business": "否",
       "user_types": [
         "会员与消费者"
       ],
@@ -79,7 +78,15 @@
       "service_public_severity": 0,
       "service_national_severity": 0,
       "involves_transactions": "否",
-      "interconnected_system_level": "1 级"
+      "interconnected_system_level": "1 级",
+      "development_models": [
+        "外包开发"
+      ],
+      "outsourced_operations": "是",
+      "physical_media": "否",
+      "physical_media_transport": "否",
+      "facility_management": "是",
+      "physical_visitors": "否"
     },
     "notes": {
       "security_responsible_entity": "AAA Software",
@@ -91,9 +98,97 @@
       "service_national_severity": "系统不涉及核心业务流程，主要作为辅助用途。不涉及个人敏感信息，不涉及重要信息，不涉及核心信息"
     },
     "department_contacts": {
-      "零售运营": "Alice",
-      "会员与客户服务": "Bob",
-      "品牌与市场营销": "Eve"
+      "零售运营": {
+        "name": "Alice（Demo）",
+        "organization": "零售运营部",
+        "title": "零售运营经理",
+        "scope": "协调门店 AI 客服试点、业务需求确认及上线验收",
+        "contact_method": "alice.retail@example.com（演示邮箱）"
+      },
+      "门店管理": {
+        "name": "陈悦（Demo）",
+        "organization": "门店管理部",
+        "title": "区域店长",
+        "scope": "组织门店试用、收集员工反馈并确认现场操作流程",
+        "contact_method": "chen.store@example.com（演示邮箱）"
+      },
+      "电子商务": {
+        "name": "李晨（Demo）",
+        "organization": "电子商务部",
+        "title": "电商产品经理",
+        "scope": "负责线上客服入口、商品咨询流程与渠道体验验收",
+        "contact_method": "li.ecommerce@example.com（演示邮箱）"
+      },
+      "商品企划与采购": {
+        "name": "王宁（Demo）",
+        "organization": "商品企划与采购部",
+        "title": "商品信息主管",
+        "scope": "核对商品规格、适用场景与产品知识库内容",
+        "contact_method": "wang.product@example.com（演示邮箱）"
+      },
+      "供应链与物流": {
+        "name": "赵航（Demo）",
+        "organization": "供应链与物流部",
+        "title": "物流运营主管",
+        "scope": "审核配送和售后物流知识，协调物流异常咨询流程",
+        "contact_method": "zhao.logistics@example.com（演示邮箱）"
+      },
+      "品牌与市场营销": {
+        "name": "Eve（Demo）",
+        "organization": "品牌与市场营销部",
+        "title": "品牌内容经理",
+        "scope": "审核品牌话术、运动场景建议与营销内容使用边界",
+        "contact_method": "eve.brand@example.com（演示邮箱）"
+      },
+      "会员与客户服务": {
+        "name": "Bob（Demo）",
+        "organization": "会员与客户服务部",
+        "title": "客户服务主管",
+        "scope": "维护问答知识库、人工转接流程和投诉处理规则",
+        "contact_method": "bob.service@example.com（演示邮箱）"
+      },
+      "财务": {
+        "name": "周敏（Demo）",
+        "organization": "财务部",
+        "title": "财务业务伙伴",
+        "scope": "审核项目预算、供应商费用与采购结算安排",
+        "contact_method": "zhou.finance@example.com（演示邮箱）"
+      },
+      "人力资源": {
+        "name": "孙佳（Demo）",
+        "organization": "人力资源部",
+        "title": "培训主管",
+        "scope": "安排客服人员培训，确认员工使用指引",
+        "contact_method": "sun.hr@example.com（演示邮箱）"
+      },
+      "信息技术": {
+        "name": "David（Demo）",
+        "organization": "信息技术部",
+        "title": "应用架构师",
+        "scope": "负责云端部署、接口集成、监控告警及恢复演练",
+        "contact_method": "david.it@example.com（演示邮箱）"
+      },
+      "信息安全部门": {
+        "name": "Grace（Demo）",
+        "organization": "信息安全部",
+        "title": "信息安全经理",
+        "scope": "审核权限、数据保护、日志留存与安全测试整改",
+        "contact_method": "grace.security@example.com（演示邮箱）"
+      },
+      "法务与合规": {
+        "name": "林可（Demo）",
+        "organization": "法务与合规部",
+        "title": "隐私合规顾问",
+        "scope": "审核隐私告知、服务条款、数据处理协议及合规边界",
+        "contact_method": "lin.legal@example.com（演示邮箱）"
+      },
+      "其他": {
+        "name": "Alex（Demo）",
+        "organization": "示例云智软件有限公司（外包）",
+        "title": "供应商交付经理",
+        "scope": "协调 AI 客服开发、发布计划、缺陷修复和交付证据",
+        "contact_method": "alex.vendor@example.com（演示邮箱）"
+      }
     },
     "frameworks": [
       "MLPS_LEVEL_2"

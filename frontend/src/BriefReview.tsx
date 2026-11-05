@@ -1,11 +1,10 @@
 import NetworkTopology from './NetworkTopology'
-import NarrativeRefinement from './NarrativeRefinement'
 import factHeadings from '../../backend/app/data/prd_fact_headings.json'
 import { isVisible, type Question } from './MLPSIntake'
 import questionnaire from '../../backend/app/data/mlps_questionnaire.json'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, CheckCheck, Plus, RotateCcw, Trash2, WandSparkles } from 'lucide-react'
+import { ArrowRight, CheckCheck, RotateCcw, WandSparkles } from 'lucide-react'
 import { Button, CheckLabel, Empty, ModeControl, Notice, PreferencesContext, useCommand } from './components'
 import { briefFromQuestionnaire, gradingFacts, missingBriefFields } from './brief'
 import { useLocale } from './i18n'
@@ -34,16 +33,15 @@ export function BriefReviewPanel({ detail }: { detail: SystemDetail }) {
   const stale = !!detail.system.draft.proposal_stale
   const modelBusy = ['queued', 'running'].includes(detail.job?.state ?? '') && !detail.job?.kind.startsWith('function_expansion:')
   const classified = !!detail.system.classification.effective_level
-  const canExpand = classified && ['DRAFT', 'CLASSIFYING', 'CONTEXT_REVIEW', 'CONTROL_REVIEW', 'PRD_REVIEW'].includes(detail.system.status)
   const canOrganize = classified && ['DRAFT', 'CLASSIFYING', 'CONTEXT_REVIEW'].includes(detail.system.status)
   const fields: Record<string, string> = {
     summary: t('目标摘要', 'Goal summary'), functions: t('功能需求', 'Functional requirements'),
     departments: t('涉及部门', 'Departments'), roles: t('使用和审批角色', 'Operating and approval roles'),
     owner_role: t('业务责任角色', 'Accountable business role'),
   }
-  const missing = missingBriefFields(brief)
   const requiredMark = <span className="required-mark" aria-hidden="true">{t('必填', 'Required')}</span>
-  const fieldIssue = (key: string) => missing.includes(key) ? <small className="required-error">{t('请补充', 'Please complete ')}{fields[key]}</small> : null
+  const missing = missingBriefFields(brief)
+
   const libraryBlocked = ['SYS-SCREEN/2', 'MLPS-INTAKE/1'].includes(detail.system.classification.scheme ?? '') && detail.system.classification.controls_ready !== true
   const requiredFrameworks = (detail.system.classification.missing_frameworks?.length ? detail.system.classification.missing_frameworks : detail.system.classification.frameworks ?? []).join(' / ')
   const previous = detail.system.classification.answers ?? {}
@@ -91,14 +89,6 @@ export function BriefReviewPanel({ detail }: { detail: SystemDetail }) {
     setBrief(old => ({ ...old, [key]: value }))
     setReviewed(false)
   }
-  async function expandFunction(functionId: string) {
-    await save()
-    const result = await run(`/systems/${detail.system.id}/jobs`, {
-      kind: 'function_expansion', function_id: functionId, mode: 'openrouter',
-      language: prefs.outputLanguage === 'auto' ? locale : prefs.outputLanguage,
-    })
-    return result.job_id as string
-  }
   async function organize(mode = prefs.mode) {
     try {
       if (hasBrief) await save()
@@ -130,7 +120,7 @@ export function BriefReviewPanel({ detail }: { detail: SystemDetail }) {
   }
   function questionFacts(group: string) {
     const answers = detail.system.classification.answers ?? {}
-    const rows = (questionnaire as Question[]).filter(q => !['system_interaction', 'independent_business', 'public_service_nature', 'system_functions', 'interconnected_system_level', 'external_dependency_impact', 'safety_impact'].includes(q.key) && q.kind !== 'severity' && isVisible(q, answers) && questionGroup(q.key) === group && !(q.kind === 'severity' && Number(answers[q.key]) === 0))
+    const rows = (questionnaire as Question[]).filter(q => !['system_interaction', 'independent_business', 'public_service_nature', 'interconnected_system_level', 'external_dependency_impact', 'safety_impact'].includes(q.key) && q.kind !== 'severity' && isVisible(q, answers) && questionGroup(q.key) === group && !(q.kind === 'severity' && Number(answers[q.key]) === 0))
     const display = (value: unknown, q: Question): string => {
       if (value === undefined || value === null) return ''
       if (Array.isArray(value)) return value.map(item => display(item, q)).join(' / ')
@@ -144,7 +134,7 @@ export function BriefReviewPanel({ detail }: { detail: SystemDetail }) {
       const heading = (factHeadings as Record<string, string[]>)[q.key]
       const label = heading ? heading[locale === 'zh' ? 0 : 1] : ''
       const value = q.key === 'security_responsible_entity' ? answers[q.key] === '是' ? notes[q.key] ?? '' : '' : display(answers[q.key], q)
-      return <div key={q.key} data-source-question={q.id} data-source-field={q.key}><dt>{label}</dt><dd className="preserve-lines">{q.key === 'system_owner' ? <table><thead><tr><th>{t('部门', 'Department')}</th><th>{t('对接人', 'Contact')}</th></tr></thead><tbody>{(Array.isArray(answers[q.key]) ? answers[q.key] as unknown as string[] : []).map(department => <tr key={department}><td>{department === '其他' ? notes.system_owner || department : department}</td><td>{classification.department_contacts?.[department] ?? ''}</td></tr>)}</tbody></table> : value}</dd></div>
+      return <div key={q.key} data-source-question={q.id} data-source-field={q.key}><dt>{label}</dt><dd className="preserve-lines">{q.key === 'system_owner' ? <table><thead><tr><th>{t('部门', 'Department')}</th>{['人员姓名|Person name', '所属部门/公司（外包）|Department / company (outsourced)', '职务/职称|Position / title', '负责范围|Responsibilities', '联系方法|Contact method'].map(label => <th key={label}>{t(...label.split('|') as [string, string])}</th>)}</tr></thead><tbody>{(Array.isArray(answers[q.key]) ? answers[q.key] as unknown as string[] : []).map(department => <tr key={department}><td>{department === '其他' ? notes.system_owner || department : department}</td>{(['name', 'organization', 'title', 'scope', 'contact_method'] as const).map(key => { const contact = classification.department_contacts?.[department]; return <td key={key}>{typeof contact === 'string' ? key === 'name' ? contact : '' : contact?.[key] ?? ''}</td> })}</tr>)}</tbody></table> : value}</dd></div>
     })}</dl>
   }
 
@@ -169,7 +159,7 @@ export function BriefReviewPanel({ detail }: { detail: SystemDetail }) {
         <section className="review-section"><div className="review-section-title"><span>01</span><h3>{t('开发范围', 'Development scope')}</h3></div>{questionFacts('scope')}</section>
         <section className="review-section"><div className="review-section-title"><span>02</span><h3>{t('角色权限', 'Roles and permissions')}</h3></div>{questionFacts('roles')}</section>
         <section className="review-section" data-prd-section="03"><div className="review-section-title"><span>03</span><h3>{t('业务流程', 'Business workflows')}</h3></div>{questionFacts('workflow')}</section>
-        <section className="review-section"><div className="review-section-title"><span>04</span><h3>{fields.functions} {requiredMark}</h3><span className="mono">{brief.functions.length}</span></div><p className="field-hint">{t('至少填写一项功能，每项功能名称必填。功能说明可选填。', 'Add at least one function. Each function name is required; descriptions are optional.')}</p>{fieldIssue('functions')}{brief.functions.map((item, index) => <div className="review-function" key={item.id}><div><span className="mono">{item.id.slice(0, 12)}</span><button className="icon-button" disabled={modelBusy} aria-label={`${t('删除功能', 'Remove function')} ${index + 1}`} onClick={() => update('functions', brief.functions.filter(value => value.id !== item.id))}><Trash2 size={14} /></button></div><label>{`${t('功能', 'Function')} ${index + 1}`}{requiredMark}<input required aria-label={`${t('功能', 'Function')} ${index + 1}`} aria-invalid={!item.title.trim()} disabled={modelBusy} value={item.title} onChange={event => update('functions', brief.functions.map(value => value.id === item.id ? { ...value, title: event.target.value } : value))} /></label><label>{t('功能说明', 'Function description')}<textarea disabled={modelBusy} rows={2} value={item.description} onChange={event => update('functions', brief.functions.map(value => value.id === item.id ? { ...value, description: event.target.value } : value))} /></label><NarrativeRefinement compact sourceRevision={detail.system.revision} disabled={modelBusy || !canExpand || !item.title.trim()} buttonLabel={t('AI 扩写功能说明', 'Expand description with AI')} topic="function_expansion" text={item.title + '\n\n' + item.description} value={item.description} start={() => expandFunction(item.id)} apply={description => update('functions', latest.current.functions.map(value => value.id === item.id ? { ...value, description } : value))} /></div>)}<Button variant="text" disabled={modelBusy} onClick={() => update('functions', [...brief.functions, { id: `F-${crypto.randomUUID().slice(0, 8)}`, title: '', description: '', source_blocks: [] }])}><Plus size={14} />{t('补充遗漏功能', 'Add a missing function')}</Button>{questionFacts('functions')}</section>
+        <section className="review-section" data-prd-section="04"><div className="review-section-title"><span>04</span><h3>{fields.functions}</h3></div>{questionFacts('functions')}</section>
         <section className="review-section" data-prd-section="05"><div className="review-section-title"><span>05</span><h3>{t('数据接口', 'Data and interfaces')}</h3></div>{questionFacts('data')}</section>
         <section className="review-section" data-prd-section="06"><div className="review-section-title"><span>06</span><h3>{t('系统开发架构', 'System development architecture')}</h3></div>{questionFacts('security')}<NetworkTopology systemId={detail.system.id} images={detail.system.network_topology ?? []} /></section>
         <section className="review-section" data-prd-section="07"><div className="review-section-title"><span>07</span><h3>{t('安全开发需求', 'Security development requirements')}</h3></div><div className="security-development-blank" aria-label={t('安全开发需求留空', 'Security development requirements left blank')} /></section>

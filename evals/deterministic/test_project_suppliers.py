@@ -58,6 +58,8 @@ def test_project_supplier_full_response_and_independent_baseline(owner):
     detail = current(vendor, sid)
     command(vendor, sid, 'supplier-submit', {'round_version': detail['round']['version'],
             'answers': answers, 'mode': 'local', 'language': 'en'})
+    command(reviewer, sid, 'jobs', {'kind': 'impact_analysis', 'mode': 'local', 'language': 'en'})
+    assert 'review' in current(reviewer, sid)['permissions']
     assert asyncio.run(run_once(app.state.sessions))
     detail = current(reviewer, sid)
     decisions = {finding['id']: {'decision': 'accept', 'reason': 'Customer reviewer schedules verification'}

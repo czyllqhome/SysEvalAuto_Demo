@@ -1,0 +1,30 @@
+.control-domain-table-view { padding: 0 16px 16px; }
+.control-domain-table-section > h3 { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; font-size: 17px; color: #183654; margin: 20px 0 10px; }
+.control-domain-table-section > h3 small { margin-left: auto; font-size: 12px; font-weight: 400; color: #62758b; }
+.control-domain-heading-toggle { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; width: 100%; padding: 6px 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.control-domain-heading-toggle:hover { background: #f5f7fa; }
+.control-domain-heading-toggle:focus-visible { outline: 2px solid #3865a5; outline-offset: 2px; }
+.control-domain-table-scroll[hidden] { display: none; }
+.control-domain-table-scroll { overflow-x: auto; }
+.control-domain-table-view table { width: 100%; min-width: 680px; table-layout: fixed; border-collapse: collapse; }
+.control-domain-table-view .control-code-column { width: 23%; }
+.control-domain-table-view .control-point-column { width: 16%; }
+.control-domain-table-view .control-risk-column { width: 120px; }
+.control-domain-table-view th, .control-domain-table-view td { padding: 11px 12px; border-bottom: 1px solid #dfe6ef; text-align: left; vertical-align: top; font-family: inherit; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.control-domain-table-view th { background: #f5f7fa; color: #334e6d; font-weight: 600; letter-spacing: normal; text-transform: none; }
+.control-domain-table-view tr:hover td { background: #f8fbff; }
+.control-domain-table-view .control-table-code { display: flex; gap: 8px; align-items: flex-start; }
+.control-domain-table-view .control-table-code strong { font-size: 14px; color: #183654; }
+.control-domain-table-view .selection-toggle { width: 24px; height: 24px; flex: 0 0 24px; margin: 0; }
+.control-domain-table-view .control-table-requirement { margin: 0; white-space: pre-line; line-height: 1.6; font-size: 14px; }
+.control-domain-table-view details { margin: 2px 0 0; padding: 0; font-size: 13px; line-height: 1.6; }
+.control-domain-table-view summary { cursor: pointer; color: #5c7697; }
+.control-domain-table-view details p { margin: 8px 0; font-size: 13px; line-height: 1.6; }
+.control-domain-table-view .control-table-risk { text-align: center; vertical-align: middle; }
+.control-domain-table-view th:last-child { text-align: center; white-space: nowrap; }
+.control-risk-badge { display: inline-block; border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 600; line-height: 22px; white-space: nowrap; }
+.control-risk-high { background: #feecec; color: #a52a2a; }
+.control-risk-medium { background: #fff0df; color: #b65b0b; }
+.control-table-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.control-table-pending { color: #925c0b; }
+@media (max-width: 600px) { .control-domain-table-view { padding: 0 10px 10px; } }

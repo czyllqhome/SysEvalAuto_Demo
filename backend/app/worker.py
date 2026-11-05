@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from sqlalchemy import or_, select, update
 
 from .ai_settings import active_config
-from .ai import MODEL_RESPONSE_TIMEOUT, generate, redact_source
+from .ai import IMPACT_BATCH_SIZE, MODEL_RESPONSE_TIMEOUT, generate, redact_source
 from .db import Audit, Base, Job, System, database_url, make_engine, make_sessions, uid
 from .domain import DomainError, digest
 from .service import job_input, publish_job
@@ -31,8 +31,10 @@ def claim_job(sessions):
             job.state, job.error, job.lease_until = "failed", "JOB_FAILED", 0
             return None
         previous_fence, fence = job.fence, uid()
+        batches = (max(1, (len(job.input.get('prd', {}).get('requirements', [])) + IMPACT_BATCH_SIZE - 1) // IMPACT_BATCH_SIZE)
+                   if job.kind == 'impact_analysis' and job.mode == 'openrouter' else 1)
         changed = db.execute(update(Job).where(Job.id == job.id, Job.fence == previous_fence).values(
-            state="running", fence=fence, lease_until=now + MODEL_RESPONSE_TIMEOUT + 60, attempts=Job.attempts + 1))
+            state="running", fence=fence, lease_until=now + MODEL_RESPONSE_TIMEOUT * batches + 60, attempts=Job.attempts + 1))
         if changed.rowcount != 1:
             return None
         return job.id, fence
@@ -54,8 +56,12 @@ async def run_once(sessions):
     observed_usage = None
     try:
         # Offline drafts preserve authored text. Only external payloads are redacted.
-        output, usage = await generate(kind, redact_source(source) if mode == "openrouter" else source,
-                                       language, mode)
+        model_source = redact_source(source) if mode == 'openrouter' else source
+        if kind.startswith('delivery_evidence:'):
+            from .delivery_ai import with_images
+            with sessions() as db:
+                model_source = with_images(db, model_source)
+        output, usage = await generate(kind, model_source, language, mode)
         observed_usage = usage
         with sessions.begin() as db:
             job = db.scalar(select(Job).where(Job.id == job_id).with_for_update())

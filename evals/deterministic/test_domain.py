@@ -57,10 +57,11 @@ def test_classification_rejects_unsupported_inputs(mode, answers, level, reason)
 
 @pytest.mark.parametrize("data", [
     {"implementation_status": "yes", "duration_workdays": -1},
-    {"implementation_status": "yes", "duration_workdays": 5, "owner_name": "Owner"},
+    {"implementation_status": "yes", "duration_workdays": 10001},
     {"implementation_status": "partial", "duration_workdays": 5, "owner_name": "Owner", "implementation_plan": "Implement"},
     {"implementation_status": "no"},
     {"implementation_status": "needs_clarification"},
+    {"implementation_status": "needs_clarification", "limitations": "   "},
     {"implementation_status": "no", "limitations": "Not available", "estimated_start_date": "2026-10-10", "estimated_finish_date": "2026-10-01"},
 ])
 def test_submission_conditionals_and_dates_are_validated(data):

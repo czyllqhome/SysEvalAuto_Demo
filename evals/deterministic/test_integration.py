@@ -305,7 +305,8 @@ def test_supplier_prd_csv_import_feeds_existing_submission_flow(owner):
             "language": "en",
         },
     ).json()
-    assert result["system"]["status"] == "ANALYZING"
+    assert result["system"]["status"] == "RESULT_REVIEW"
+    assert result["report"] is None
 
 
 def test_csv_expiry_is_enforced(owner):

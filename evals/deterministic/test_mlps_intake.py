@@ -14,7 +14,7 @@ def complete():
     answers = {key: 0 for key in CORE}
     answers.update(org_name='Example', system_name='Portal', system_owner='Operations',
                    system_purpose='Improve procurement', system_functions='Approve orders', system_scenarios='Employees submit requests', security_responsible_entity='是',
-                   independent_business='是', related_assets='是', industry_specific_rules='否',
+                   related_assets='是', industry_specific_rules='否',
                    involves_transactions='否', public_service_nature='否', critical_business='非核心',
                    data_security_classification='一般', cross_border_data='否', external_dependency_impact='否', safety_impact='否',
                    data_volume_ranges={'records': 'under_100k', 'storage': 'under_1tb'},
@@ -84,8 +84,8 @@ def test_invalid_person_count(value):
 
 
 def test_schema_contains_every_source_question_and_translations():
-    assert len(QUESTIONS) == 86
-    assert len({q['key'] for q in QUESTIONS}) == 86
+    assert len(QUESTIONS) == 92
+    assert len({q['key'] for q in QUESTIONS}) == 92
     assert all(q['zh'] and q['en'] and len(q['options']) == len(q['options_en']) for q in QUESTIONS)
 
 
@@ -97,7 +97,7 @@ def test_save_confirm_revisions_and_evidence(application, monkeypatch):
     sid = detail['system']['id']
     path = f'/api/v1/systems/{sid}'
     config = client.get(path + '/mlps-intake').json()
-    assert len(config['questions']) == 86
+    assert len(config['questions']) == 92
     a, notes = complete()
     body = {'scheme': 'MLPS-INTAKE/1', 'answers': a, 'notes': notes, 'department_contacts': {'信息安全部门': 'Security liaison'}, 'frameworks': ['MLPS_LEVEL_2'], 'catalog_id': config['catalog_id']}
     saved = client.put(path + '/mlps-intake', json={**body, 'version': detail['system']['version']})
@@ -142,7 +142,7 @@ def test_retail_overview_accepts_departments_and_preserves_legacy_answers():
     a, notes = complete()
     a.update(org_industry='零售', system_stage='已上线', existing_mlps_status='已定级')
     assert validate(a, notes)[0]['system_owner'] == 'Operations'
-    assert [q['id'] for q in QUESTIONS if q['id'].startswith('A') and visible(q, a)] == ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07']
+    assert [q['id'] for q in QUESTIONS if q['id'].startswith('A') and visible(q, a)] == ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08']
     a['system_owner'] = []
     assert any(i['field'] == 'system_owner' for i in evaluate(a, notes)['issues'])
     a['system_owner'] = ['零售运营', '电子商务']
@@ -156,10 +156,12 @@ def test_retail_overview_accepts_departments_and_preserves_legacy_answers():
 def test_amer_profile_numbering_examples_and_previous_choices():
     from app.mlps_intake import validate
     active = [q for q in QUESTIONS if not q.get('retired')]
-    assert len(active) == 49
+    assert len(active) == 54
     for group in 'ABCDEFGH':
         group_questions = [q for q in active if q['id'].startswith(group) and not q.get('parent_key')]
-        assert [q['id'] for q in group_questions] == [f'{group}{i:02}' for i in range(1, len(group_questions) + 1)]
+        # Stable source IDs retain the B03 gap; the UI numbers visible questions.
+        retired_ids = {'B03'} if group == 'B' else set()
+        assert [q['id'] for q in group_questions] == [f'{group}{i:02}' for i in range(1, len(group_questions) + len(retired_ids) + 1) if f'{group}{i:02}' not in retired_ids]
     assert all(q['source_id'] and q['example_zh'] and q['example_en'] for q in active)
     assert next(q for q in active if q['key'] == 'system_name')['source_id'] == 'A03'
     answers = {'system_business_type': ['医疗服务'], 'user_types': ['政府机构'], 'data_categories': ['政务数据']}
@@ -183,7 +185,7 @@ def test_simplified_questionnaire_preserves_removed_answers_and_allows_no_integr
     assert all(not visible(q, a) for q in QUESTIONS if q['key'] in hidden)
 
 
-@pytest.mark.parametrize('contacts', [{'Unknown department': 'Name'}, {'信息安全部门': 123}, {'信息安全部门': 'X' * 501}])
+@pytest.mark.parametrize('contacts', [{'Unknown department': 'Name'}, {'信息安全部门': 123}, {'信息安全部门': 'X' * 501}, {'信息安全部门': {'unknown': 'value'}}, {'信息安全部门': {'name': 123}}, {'信息安全部门': {'scope': 'X' * 501}}])
 def test_department_contacts_validation(owner, contacts):
     _, client = owner
     detail = client.post('/api/v1/systems', json={'name': 'Contacts'}).json()
@@ -353,8 +355,8 @@ def test_saved_demo_snapshot_is_valid_scoped_and_independent():
     assert validate(demo['answers'], demo['notes'])[0] == demo['answers']
     assert all(not next(q for q in QUESTIONS if q['key'] == key).get('retired') for key in demo['answers'])
     main = [q for q in QUESTIONS if not q.get('parent_key') and visible(q, demo['answers'])]
-    assert len(main) == DEMO_TEMPLATE['visible_question_count'] == 39
-    assert sum(q['key'] in demo['answers'] for q in main) == 39
+    assert len(main) == DEMO_TEMPLATE['visible_question_count'] == 44
+    assert sum(q['key'] in demo['answers'] for q in main) == 44
     assert demo['answers']['involves_transactions'] in ('是', '否', '不确定')
     assert 'evidence:' not in str(demo)
     original = demo['answers']['system_name']
@@ -640,14 +642,50 @@ def test_refreshed_demo_has_current_population_answer():
 @pytest.mark.parametrize('answer', ['是', '否', '不确定'])
 def test_boundary_review_distinguishes_no_from_unanswered(answer):
     answers, notes = complete()
-    answers['independent_business'] = answer
-    issues = [i for i in evaluate(answers, notes)['issues'] if i['code'] == 'QA01' and i['field'] == 'independent_business']
+    answers['security_responsible_entity'] = answer
+    issues = [i for i in evaluate(answers, notes)['issues'] if i['code'] == 'QA01' and i['field'] == 'security_responsible_entity']
     if answer == '是':
         assert not issues
     elif answer == '否':
         assert '已选择“否”' in issues[0]['zh']
     else:
         assert '尚未确认' in issues[0]['zh']
+
+
+@pytest.mark.parametrize('answer', [None, '', '是', '否', '不确定'])
+def test_retired_independent_business_does_not_affect_grading(answer):
+    from app.mlps_intake import GRADING_FIELDS, evaluate_grading, validate, visible
+    answers, notes = complete()
+    baseline = evaluate(answers, notes)
+    early_baseline = evaluate_grading(answers, notes)
+    if answer is not None:
+        answers['independent_business'] = answer
+        notes['independent_business'] = 'Historical authored explanation'
+    question = next(q for q in QUESTIONS if q['key'] == 'independent_business')
+    assert not visible(question, answers)
+    assert 'independent_business' not in GRADING_FIELDS
+    assert evaluate(answers, notes) == baseline
+    assert evaluate_grading(answers, notes) == early_baseline
+    assert baseline['status'] == 'preliminary_complete'
+    assert validate(answers, notes) == (answers, notes)
+
+
+def test_legacy_independent_business_no_can_be_confirmed_and_is_preserved(owner):
+    _, client = owner
+    detail = client.post('/api/v1/systems', json={'name': 'Retired boundary question'}).json()
+    sid = detail['system']['id']
+    answers, notes = complete()
+    answers['independent_business'] = '否'
+    notes['independent_business'] = 'Historical boundary explanation'
+    response = command(client, sid, 'classification-confirmations', {
+        'scheme': 'MLPS-INTAKE/1', 'answers': answers, 'notes': notes, 'frameworks': ['MLPS_LEVEL_2'],
+    })
+    assert response.status_code == 200, response.text
+    saved = response.json()['system']['classification']
+    assert saved['answers']['independent_business'] == '否'
+    assert saved['notes']['independent_business'] == notes['independent_business']
+    assert saved['assessment']['status'] == 'preliminary_complete'
+    assert not any(i['field'] == 'independent_business' for i in saved['assessment']['issues'])
 
 
 def test_unselected_parties_do_not_require_hidden_answers_or_rationales():
@@ -678,4 +716,68 @@ def test_network_minimum_never_reduces_higher_matrix_result(entry):
     result = evaluate(answers, notes)
     assert result['base_level'] == 3
     assert result['proposed_level'] == 3
-    assert result['rule_engine_version'] == '1.8.1'
+    assert result['rule_engine_version'] == '1.8.2'
+
+
+def test_structured_department_contact_roundtrip(owner):
+    _, client = owner
+    detail = client.post('/api/v1/systems', json={'name': 'Structured contacts'}).json()
+    sid = detail['system']['id']
+    contact = {'name': 'Alice', 'organization': 'Supplier company', 'title': 'Engineer', 'scope': 'API integration', 'contact_method': 'alice@example.test'}
+    body = {'version': detail['system']['version'], 'answers': {'system_owner': ['信息安全部门']}, 'frameworks': ['MLPS_LEVEL_2'], 'department_contacts': {'信息安全部门': contact, '财务': 'Legacy contact'}}
+    response = client.put(f'/api/v1/systems/{sid}/mlps-intake', json=body)
+    assert response.status_code == 200, response.text
+    assert client.get(f'/api/v1/systems/{sid}/mlps-intake').json()['saved']['department_contacts'] == body['department_contacts']
+
+
+def test_grade_first_preview_does_not_require_remaining_questionnaire():
+    from app.mlps_intake import DEMO_TEMPLATE, GRADING_FIELDS, evaluate_grading
+    template = DEMO_TEMPLATE['template']
+    answers = {k: v for k, v in template['answers'].items() if k in GRADING_FIELDS}
+    notes = template['notes']
+    early = evaluate_grading(answers, notes)
+    assert early['status'] == 'preliminary_complete'
+    assert early['proposed_level'] == evaluate(template['answers'], notes)['proposed_level']
+    assert evaluate(answers, notes)['status'] == 'pending_review'
+    assert any(i['field'] == 'system_name' for i in evaluate(answers, notes)['issues'])
+    del answers['external_network_access']
+    missing = evaluate_grading(answers, notes)
+    assert missing['status'] == 'pending_review'
+    assert missing['is_lower_bound_only']
+    assert any(i['field'] == 'external_network_access' for i in missing['issues'])
+
+
+def test_grade_first_keeps_unknown_and_rationale_review():
+    from app.mlps_intake import DEMO_TEMPLATE, evaluate_grading
+    answers = {**DEMO_TEMPLATE['template']['answers'], 'service_rights_severity': 9}
+    result = evaluate_grading(answers, {})
+    assert result['status'] != 'preliminary_complete'
+    assert {'QA02', 'RATIONALE'} <= {i['code'] for i in result['issues']}
+
+
+def test_information_confirmation_matches_controls_without_brief_page(owner, monkeypatch):
+    from app import methodology
+    monkeypatch.setattr(methodology, 'LEGACY_FIXTURES_ENABLED', False)
+    app, client = owner
+    detail = client.post('/api/v1/systems', json={'name': 'Direct information'}).json()
+    sid = detail['system']['id']
+    from app.mlps_source import ensure_catalog
+    from app.db import User
+    from sqlalchemy import select
+    with app.state.sessions.begin() as db:
+        ensure_catalog(db, db.scalar(select(User)).org_id)
+    answers, notes = complete()
+    payload = {'answers': answers, 'notes': notes, 'frameworks': ['MLPS_LEVEL_2']}
+    response = command(client, sid, 'information-confirmations', payload)
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result['system']['status'] == 'CONTROL_REVIEW'
+    assert result['system']['context_revision_id']
+    assert result['system']['context']['functions'][0]['title'] == answers['system_functions']
+    assert any(c['included'] for c in result['controls'])
+    bad = {**payload, 'answers': {**answers, 'service_rights_severity': 9}}
+    rejected = client.post(f'/api/v1/systems/{sid}/information-confirmations', json={**bad, 'version': result['system']['version']})
+    assert rejected.status_code == 409
+    after = client.get(f'/api/v1/systems/{sid}').json()
+    assert after['system']['context_revision_id'] == result['system']['context_revision_id']
+    assert after['system']['revision'] == result['system']['revision']

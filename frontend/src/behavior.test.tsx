@@ -85,7 +85,8 @@ it('does not offset a critical answer and treats missing information as provisio
 })
 
 it('does not enable supplier submission for incomplete or reversed-date commitments', () => {
-  expect(answerComplete({ implementation_status: 'yes', duration_workdays: 5, owner_name: '', implementation_plan: 'Build', limitations: '', alternative: '' })).toBe(false)
+  expect(answerComplete({ implementation_status: 'yes', duration_workdays: null, owner_name: '', implementation_plan: '', limitations: '', alternative: '' })).toBe(true)
+  expect(answerComplete({ implementation_status: 'needs_clarification', duration_workdays: null, owner_name: '', implementation_plan: '', limitations: '  ', alternative: '' })).toBe(false)
   expect(answerComplete({ implementation_status: 'no', duration_workdays: null, owner_name: '', implementation_plan: '', limitations: 'Not supported', alternative: '' })).toBe(true)
   expect(answerComplete({ implementation_status: 'yes', duration_workdays: 5, owner_name: 'Owner', implementation_plan: 'Build', limitations: '', alternative: '', estimated_start_date: '2026-10-10', estimated_finish_date: '2026-10-01' })).toBe(false)
 })

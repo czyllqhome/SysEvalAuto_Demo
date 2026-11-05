@@ -1,0 +1,11 @@
+.control-match-summary .control-reason-table { width: 100%; min-width: 1000px; table-layout: fixed; }
+.control-reason-table .reason-source { width: 10%; }
+.control-reason-table .reason-identifier { width: 12%; }
+.control-reason-table .reason-requirement { width: 34%; }
+.control-reason-table .reason-domain { width: 10%; }
+.control-reason-table .reason-decision { width: 10%; }
+.control-reason-table .reason-explanation { width: 24%; }
+.control-match-summary .control-reason-table th,
+.control-match-summary .control-reason-table td { padding: 12px; vertical-align: top; overflow-wrap: anywhere; font-size: 14px; line-height: 1.6; }
+.control-match-summary .control-reason-original { margin: 0; white-space: pre-wrap; font-size: inherit; line-height: inherit; }
+.control-match-summary .control-exemption-breakdown { margin: 12px 0; }

@@ -1,3 +1,15 @@
+> 2026-11-05 补充：来源高风险的待澄清项也必须由负责人逐项决定；可接受并记录责任理由，或要求澄清。批量操作跳过这些项；决定绑定当前提交和报告，不修改来源风险、供应商答复或独立双签要求。
+>
+> English: source-High clarification requires an individual owner decision. Acceptance requires a rationale and is bound to the current submission/report; bulk actions skip it.
+
+> 2026-11-05：供应商提交复核后仅保存不可变答复，直接进入负责人复核，不自动调用 AI 或排队影响分析。负责人默认查看开发项确认比例、部分/无法完成/待澄清数量，以及固定来源中高风险未确认项；后续规则/AI 审查按需显式发起，原双签及风险门槛保留。无需迁移或重置数据。详见[供应商协同说明](docs/supplier-prd-delivery.md)。
+>
+> English: submission now shows a pinned commitment summary without automatic analysis. Subsequent rule/model review is explicit; existing review gates and independent baseline confirmations remain intact.
+
+> 2026-11-05：AmerSports-2.18 / 规则引擎1.8.2 移除原定级 G02（来源 B03，`independent_business`）及其 QA01 边界复核规则。定级页现为14题，展示编号顺延为 G01–G14；缺失、否、不确定均不再触发该题的必填或复核。历史答案、说明、已确认结果及基线保留；重新计算使用新规则。责任主体校验继续有效，无需数据迁移或重置。
+>
+> English: The former G02 independent-business question and its QA01 review rule are retired. Grading now has 14 questions. Historical answers and confirmed snapshots remain intact; new calculations ignore this field. Responsibility checks remain active.
+
 > 2026-11-04：移除独立系统信息录入步骤；确认分级后直接审查应用说明。历史 discovery 链接重定向；无历史描述时从已确认问卷预填，保留人工补齐与确认。
 
 > 当前 AmerSports-2.16 / 规则引擎1.8.0：只以当前可见问卷字段进行分级。退役 B11 承载对象、B12 特殊边界及大数据平台适用性题，取消承载下限和相关结果卡片。历史答案保存但不参与当前结果。B04 对接等级、D01 数据类别明细仍按所选答案展开；未展开的旧答案不影响等级或复核。E09/E10 仅校验当前所选客体，其他客体不再要求补答或理由。旧个人信息开关不再决定当前字段显示或规则。Current grading uses visible questionnaire inputs only; historical answers remain stored.
@@ -1032,4 +1044,86 @@ tables on restart. Existing runtime records and baseline hashes remain unchanged
 
 ## 2026-11-02: delivery evidence extension
 
-The post-baseline delivery workspace now supports per-finding file evidence, immutable supplier submission rounds, human decisions and reopening. Supplier remediation completion requires delivery review before customer retesting. Original baseline and confirmation hashes are preserved. See [implementation boundaries and verification](docs/finding-delivery-evidence-development.md#15-首版实施记录2026-11-02). Apply the additive `delivery_evidence` migration in deployments. AI recognition remains a future extension.
+The post-baseline delivery workspace supports per-item file evidence, immutable supplier submission rounds, human decisions and reopening. Supplier remediation completion requires delivery review before customer retesting. Original baseline and confirmation hashes are preserved. Apply the additive `delivery_evidence` migration in deployments. The 2026-11-04 extension adds contextual risk analysis, final Markdown export and AI evidence assessment; see [the current supplier lifecycle contract](docs/supplier-prd-delivery.md).
+
+## 2026-11-04: Grade-first questionnaire
+
+评估问卷先进入“优先定级”：集中独立定级条件、对接等级、网络入口、交易/公共服务/业务重要性、数据类别及条件明细、人数、数据规模与分类、跨境、外部影响、安全影响和两组影响矩阵。保留原题号、答案键、理由及历史记录；其余 A–E 章节不重复这些问题。
+
+先保存草稿并计算初步等级，查看依据后继续填写其余问题。早期计算使用同一规则引擎，仅将后续非定级信息的必填检查留到完整问卷校验；缺失定级输入、未知影响、理由缺失和专业复核仍阻止采用完整初步建议。早期计算不创建已确认等级、应用说明或控制选择。完整问卷仍通过原确认接口重新计算与校验，随后审查应用说明，确认后按等级匹配控制项；默认自动选择对应等级参考库。修改已确认答案继续触发原有修订和下游失效机制。
+
+The questionnaire starts with Grade first, preserving original question IDs, authored text and conditional details. A shared grading-field contract drives the first section and a separate early rule preview. Remaining sections omit those questions. Full validation and revision checks still gate final confirmation; controls are matched by grade after brief confirmation. No migration or runtime-data reset is required.
+
+2026-11-04 工作流更正：新建系统使用九个独立阶段：系统定级、定级结果、系统信息收集、安全控制匹配、PRD复核及下发、供应商复核、影响评估、双方确认、开发进度追踪。定级题仅在第一阶段，剩余问卷和应用说明确认属于第三阶段。早期结果保留为草稿计算，完整问卷确认仍经过服务端校验。
+New-system workflows expose nine separate stages. Grading inputs and remaining information use distinct routes; full server validation still precedes control matching.
+
+## Deployment-based MLPS domains (2026-11-04)
+
+六字段新发布为安全物理环境和云计算安全扩展要求添加互斥适用规则。问卷 deployment_model 中任一专有云、公有云、混合云、SaaS 优先归为云，即使同时选择本地部署：纳入同级全部云扩展条目，排除同级物理环境条目。明确本地数据中心、托管机房、门店或仓库部署时反向匹配；缺失、其他、不确定保留待确认，不静默排除。其他域及 risk_level 规则保持不变。
+
+Derived hosting.models facts and rule answer references are pinned with classification and control snapshots. New releases apply the domain switch across levels 1–3. Historical releases remain unchanged; existing assessments explicitly load the latest catalog and reconfirm information. Named source replacement preserves raw uploads and immutable releases, rejects omitted controls or cross-file identity collisions, and updates only the authorized organization.
+
+2026-11-04：移除应用说明/PRD 初稿中间页面。系统信息确认通过 information-confirmations 在同一事务内校验完整问卷、确认等级、从问卷建立可追溯 ContextRevision 并匹配控制，失败整体回滚。完成后直接进入控制匹配，确认控制范围后生成完整 PRD，沿用现有复核及下发权限。历史 brief 链接重定向至信息收集或控制页，不自动写入。
+Information confirmation atomically validates questionnaire facts, creates the context revision and matches controls. No intermediate brief page remains; control scope confirmation generates the full PRD for review and dispatch.
+
+2026-11-04 控制适用性补充：信息收集新增软件开发/交付方式（多选）、外包运维、实体介质、介质运输、机房管理责任（含云商取证）、现场访客六题，不参与等级计算。Demo 信息题为30、定级题仍15。六字段新发布按来源编号固定匹配自行/外包开发、外包运维、介质存放/运输、机房管理与物理访客控制；unknown 留作候选，只有明确不涉及才自动排除。保留云扩展、备份与通用安全条目，不按控制域泛化删除。匹配快照保留规则、答案及来源，界面展示具体理由；修改问卷沿用修订失效机制，旧评估显式加载新控制库后确认信息。
+Six scope questions drive versioned control applicability without affecting grading. Unknown answers remain candidates. Mixed development modes retain both sets; outsourced assurance is not a blanket exemption.
+
+
+## 2026-11-04：供应商 PRD 答复至交付验收
+
+当前行为以 [供应商协同与 AI 交付说明](docs/supplier-prd-delivery.md) 为准：PRD 原文下直接勾选可完成性、填写部分/无法完成原因；
+来源 High 保持原等级，依据固定系统事实进行 AI 情境分析，低/中残余风险也须客户人工审查接受。
+这替代早期按 no 永久判 High 失败及所有模型严重度强制覆盖的实现。
+独立双签同一 hash 后可下载最终 Markdown 稿；开发项按已承诺的 PRD requirement 追踪，附件提交后自动
+启动有配置的 AI 逐项评估，保留独立人工验收、来源校验、版本隔离和不可变证据。原运行数据不重置。
+
+English: inline supplier PRD responses, evidence-bound contextual impact assessment, jointly confirmed
+final export, and per-requirement delivery AI are implemented. AI does not approve on behalf of either party.
+
+
+## 2026-11-04：PRD v3 阅读与填写
+
+默认 PRD 改为九章正文与可折叠附录，安全开发需求只按域展示控制内容；验收、项目实施说明与来源移至附录。联系人、数据范围与恢复目标使用可读格式；逐项编辑支持搜索和折叠。已有草稿可应用当前模板保存未批准新修订，保留需求 JSON、来源、生成方式与旧稿。无需迁移或重置数据。详见 [模板说明](docs/prd-template-review.md)。
+
+English: PRD v3 groups control-only security content by domain and separates acceptance/provenance appendices. Applying a template creates an unapproved revision, preserving history, references, generation mode and approval boundaries.
+
+
+## 2026-11-05：移除问卷附加材料
+
+已上传材料的下载链接旁增加“移除”，仅编辑者可用。移除立即保存，通过 system version、组织和评估归属检查，记录 evidence_id 审计；从当前问卷答案/备注取消引用，并排除后续拓扑快照与 PRD 生成。其他未保存的文字仍保留在编辑器，继续使用原保存流程。
+
+采用逻辑移除，文件内容、历史问卷快照、旧 PRD 和基线保持不变；已确认的信息沿用修订失效流程，必须重新确认。重试有幂等保护，过期版本不会移除。被移除 ID 不能通过旧答案重新引用，需要重新上传。无需数据库迁移或运行数据重置。
+
+`POST /systems/{id}/mlps-intake/evidence-removals` 接收 `version`、`evidence_id`；移除 ID 保存在系统 draft 的 `removed_mlps_evidence`，历史下载仍受原组织与评估权限控制。
+
+English: Editors can detach uploaded evidence from the current questionnaire and future PRDs. Files and immutable history remain available; confirmed facts require revision and reconfirmation. Unsaved authored text survives removal and conflict responses. Version checks, authorization, audit and idempotency remain mandatory.
+
+
+## 2026-11-05：区分控制不适用与人工豁免
+
+控制匹配统计新增“不适用”及独立原因列表。已确认条件经规则判定不适用、且没有人工排除理由的条目归入不适用；人工填写原因的排除归入豁免，仍需例外审查。未知适用条件以及需重新确认的候选保持待确认。原始条目 = 已纳入 + 不适用 + 豁免 + 待确认；跨等级、非固定控制库与额外自定义条目沿用原统计边界。
+
+明确非云部署时云计算安全扩展要求归入不适用；云部署时自动排除的物理环境要求也采用相同口径。缺失、其他或不确定的部署不因未勾选云而自动判定不适用。匹配算法及控制范围没有更改，原有来源、版本和审批记录保留。统计卡片桌面五列、小屏换行，中英文文案同步。
+
+English: Counts now separate rule-based non-applicability from manually reasoned exemptions. Non-cloud deployment makes cloud extensions not applicable; unknown deployment remains pending. Counts retain pinned-catalog/reference-level boundaries and do not alter selection or approval records.
+
+
+## 2026-11-05：豁免与不适用原因表展示来源原文
+
+原因表用 Source、Identifier 替换内部条目编号，新增完整控制项原文列。内容读取已固定控制快照的来源字段，缺失时逐字段回退到来源条款或历史作者原文；切换中英文仅改变界面文案，不翻译或截断来源原文。缺失来源或标识明确显示未提供，不生成替代编号。
+
+统计下增加部署规则、范围规则、人工排除的豁免数量分解。沿用当前分类：云部署下通用物理控制为部署规则豁免，不涉及开发/运维活动为范围规则豁免；非云部署下云扩展为不适用。未改写匹配规则、控制选择、历史来源或确认基线。当前云部署示例的20条豁免由15条物理环境和5条活动范围构成，29条云扩展已纳入，因此不适用为0。
+
+English: Reason tables show source, identifier and complete pinned original requirements, preserving authored language and line breaks. Exemption counts now explain deployment-rule, scope-rule and manual components. Existing classification, selections and immutable history remain unchanged.
+
+
+## 2026-11-05：供应商复核简化与按域分组
+
+供应商端移除重复的 PRD 复核及下发导航，旧 PRD 路由转向供应商复核；客户九阶段及审批下发保留。答复列表按本轮固定控制来源域分组，支持搜索、域/状态筛选、分组折叠及完成/未填写计数。默认收起例外及验收输入；勾选可完成即可提交该项答复，异常项须说明原因，可补充补偿措施与工作日。原有方案、负责人、日期和历史承诺保留，工期范围与日期关系仍校验。
+
+服务端 SupplierAnswer 与前端完整性同步；批量填入保护所有已有答复，包括无方案文本的已勾选项。本地影响预审在无实施方案时引用可追溯的 implementation_status，不制造证据，不自动批准风险。prd.requirement_domains 从本轮快照中的控制映射来源域，仅新增展示信息，不修改 PRD 内容/hash，不暴露客户全量控制。沿用版本、组织隔离、不可变提交及独立双方确认。无需迁移或重置运行数据。
+
+English: Supplier navigation, compact domain grouping and checkbox-only commitments are implemented. Exceptions still require explanations and owner review. Pinned domain labels, historical text, version checks and immutable same-hash confirmations are preserved. See docs/supplier-prd-delivery.md for the current contract.
+
+供应商详情增加 `prd.high_risk_requirements`（需求 ID 数组），可在提交前展示固定来源高风险标记；发布轮次使用该轮控制快照，不向供应商暴露完整控制库。控制域导航与搜索、答复状态、高风险筛选只改变显示范围，完成度仍按完整分类/域统计。

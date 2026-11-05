@@ -1,3 +1,7 @@
+> 2026-11-05：AmerSports-2.18 / 规则引擎1.8.2 移除原定级 G02（来源 B03，`independent_business`）及其 QA01 边界复核规则。定级页现为14题，展示编号顺延为 G01–G14；缺失、否、不确定均不再触发该题的必填或复核。历史答案、说明、已确认结果及基线保留；重新计算使用新规则。责任主体校验继续有效，无需数据迁移或重置。
+>
+> English: The former G02 independent-business question and its QA01 review rule are retired. Grading now has 14 questions. Historical answers and confirmed snapshots remain intact; new calculations ignore this field. Responsibility checks remain active.
+
 > 当前 AmerSports-2.17 / AMER-INTERNAL/5 / 规则引擎1.8.1：公网可访问入口最低2级，无公网入口最低1级。历史结果需重新计算确认后更新。
 
 > 应用说明以 PRD 初稿展示，增加问卷部署/业务连续性事实和安全开发需求占位。正式 PRD 将已纳入控制按控制域分组，跨域需求以联合域分组，保留来源与验收引用。
@@ -200,7 +204,7 @@ A04 建设目的与功能（原 A06），A05 业务类型（原 A07）。退役�
 - H 材料题退役，不再显示也不参与完成度和必填校验；网络拓扑上传仅保留 B07。已有材料继续保留及授权下载。
 - 所有通用“补充说明、统计口径与证据”折叠区移除；六项核心判断理由、其他选项说明和 G 组专家/历史等级/行业条款的专用字段继续满足对应规则。
 - “对象原则”改为“系统类型核查”，“事实与佐证”改为“系统情况”。
-- 原 related_assets 的多资源属性与系统对接不是同一事实。原字段退役并保留历史；新增 system_interaction 询问系统间对接，不把“无对接”视为无效定级对象。责任主体与独立业务校验继续保留。
+- 原 related_assets 的多资源属性与系统对接不是同一事实。原字段退役并保留历史；新增 system_interaction 询问系统间对接，不把“无对接”视为无效定级对象。责任主体校验继续保留；独立业务校验已于 2026-11-05 随原 G02 移除。
 - 原 B08 系统依赖移为 E01，其余 E 题顺延为 E02–E09。B 组剩余题重新编号。
 - C02 注册/授权人数改为 0、1–50、51–200、201–1000、1001–5000、5001–10000、10001–100000、100001–1000000、超过1000000及不确定；仅用于规模了解，不改变矩阵等级。历史精确数字仍可显示和保存。月活、并发、每日处理量退役，历史答案不删除。
 
@@ -272,6 +276,7 @@ F01–F06 事故场景题保持不变，F07 业务信息和 F08 系统服务分�
 
 B02 选择是后显示“主要负责单位或部门名称”，使用 notes.security_responsible_entity 保存。
 草稿允许未填；确认前服务端检查非空。切换否或不确定仅隐藏输入，不清除原文。
+以下仅保留历史来源说明；B03（原定级 G02）及其边界复核规则已于 2026-11-05 退役，不再参与当前问卷或判定。
 B03 来源为用户提供问卷 B03（independent_business），对应 GB/T 22240—2020 第5.1.1条
 “承载相对独立的业务应用”。当前问法为通俗改写，会员管理、库存查询和统一登录为界面示例，
 并非标准原文或自动定级门槛。用于确认评估对象范围，不直接参与等级矩阵分值。
@@ -320,3 +325,57 @@ AmerSports-2.17 / AMER-INTERNAL/5 / 规则引擎 1.8.1：B06 公众可访问入�
 Public ingress now establishes internal level 2; no internet ingress explicitly establishes
 level 1. Existing controlled-ingress and VPN rules remain. Higher matrix results are preserved.
 Historical confirmed snapshots retain their original rule version until explicit reconfirmation.
+
+
+## 2026-11-04：部门对接人信息
+
+每个所选部门可填写人员姓名、所属部门/公司（外包）、职务/职称、负责范围、联系方法（均可选，每项最多500字符）。department_contacts 支持 name、organization、title、scope、contact_method 对象；历史字符串按人员姓名展示，编辑时保留原姓名。取消部门选择不删除已填信息，重新勾选可恢复。PRD 初稿与正式文档按所选部门展示五项信息，语言切换保留原文。无需数据迁移。
+
+Each selected department supports optional person name, department/company, position/title, responsibilities and contact method. Legacy strings remain readable as names; deselection preserves records. Both PRD views retain authored text.
+
+
+## 2026-11-04：PRD 初稿功能只读展示
+
+审查应用说明的“功能需求”直接展示当前分级问卷 A05（system_functions）答案，保留换行和来源标识。移除该章节的功能编辑、增加、删除及 AI 扩写入口；需要修改时返回分级问卷。历史功能草稿及扩写文本保留，不在该章节覆盖问卷答案。
+
+The PRD draft function chapter displays the grading questionnaire answer as read-only source text. Function editing and AI expansion actions are removed from this chapter; historical drafts remain stored.
+
+## 2026-11-04: Grade-first questionnaire
+
+评估问卷先进入“优先定级”：集中独立定级条件、对接等级、网络入口、交易/公共服务/业务重要性、数据类别及条件明细、人数、数据规模与分类、跨境、外部影响、安全影响和两组影响矩阵。保留原题号、答案键、理由及历史记录；其余 A–E 章节不重复这些问题。
+
+先保存草稿并计算初步等级，查看依据后继续填写其余问题。早期计算使用同一规则引擎，仅将后续非定级信息的必填检查留到完整问卷校验；缺失定级输入、未知影响、理由缺失和专业复核仍阻止采用完整初步建议。早期计算不创建已确认等级、应用说明或控制选择。完整问卷仍通过原确认接口重新计算与校验，随后审查应用说明，确认后按等级匹配控制项；默认自动选择对应等级参考库。修改已确认答案继续触发原有修订和下游失效机制。
+
+The questionnaire starts with Grade first, preserving original question IDs, authored text and conditional details. A shared grading-field contract drives the first section and a separate early rule preview. Remaining sections omit those questions. Full validation and revision checks still gate final confirmation; controls are matched by grade after brief confirmation. No migration or runtime-data reset is required.
+
+2026-11-04 工作流更正：新建系统使用九个独立阶段：系统定级、定级结果、系统信息收集、安全控制匹配、PRD复核及下发、供应商复核、影响评估、双方确认、开发进度追踪。定级题仅在第一阶段，剩余问卷和应用说明确认属于第三阶段。早期结果保留为草稿计算，完整问卷确认仍经过服务端校验。
+New-system workflows expose nine separate stages. Grading inputs and remaining information use distinct routes; full server validation still precedes control matching.
+
+定级页面使用独立 G01–G15 展示编号，保存键及历史来源不变。Demo 仅填充当前页面/章节及其条件子题，保留其他章节答案、说明及联系人；撤销同样仅恢复本次填入的字段。结果页不提供 Demo 填入。进度按当前阶段统计。
+Grading uses independent G-prefixed display numbers. Demo fill and undo are scoped to the current page and its conditional children; other pages remain intact.
+
+2026-11-04 Demo 范围更正：系统信息收集的 Demo 一次填入并保存 A–E 五维度全部非定级题及联系人；不再仅填当前章节。不改变定级答案、理由与参考库选择，不自动确认信息或匹配控制。撤销恢复并保存本次填入前的信息，失败时保留未保存提示。
+Information-stage Demo fills and saves all five dimensions, preserving grading inputs and the current chapter. Undo also saves the restored draft.
+
+2026-11-04：Demo 对接人模板已覆盖全部 13 个可选部门（含信息安全和外包“其他”），五项联系人字段均有虚构示例，姓名标注 Demo，邮箱使用 example.com。既有评估不自动改写；点击信息收集 Demo 后填入并保存。
+Demo contacts cover all 13 department choices with five populated fields and fictional example.com addresses. Existing records change only through explicit Demo fill.
+
+2026-11-04：移除应用说明/PRD 初稿中间页面。系统信息确认通过 information-confirmations 在同一事务内校验完整问卷、确认等级、从问卷建立可追溯 ContextRevision 并匹配控制，失败整体回滚。完成后直接进入控制匹配，确认控制范围后生成完整 PRD，沿用现有复核及下发权限。历史 brief 链接重定向至信息收集或控制页，不自动写入。
+Information confirmation atomically validates questionnaire facts, creates the context revision and matches controls. No intermediate brief page remains; control scope confirmation generates the full PRD for review and dispatch.
+
+系统信息收集的展示编号按可见主问题在 A–E 各章连续编号，当前 Demo 为 7+6+2+3+6=24 题；定级 G01–G15 独立统计。条件子题计入所属主问题的完成状态，不另占主问题数。历史答案键及来源编号保持不变。
+Information display numbering is consecutive within each section; progress counts visible main questions only.
+
+2026-11-04 控制适用性补充：信息收集新增软件开发/交付方式（多选）、外包运维、实体介质、介质运输、机房管理责任（含云商取证）、现场访客六题，不参与等级计算。Demo 信息题为30、定级题仍15。六字段新发布按来源编号固定匹配自行/外包开发、外包运维、介质存放/运输、机房管理与物理访客控制；unknown 留作候选，只有明确不涉及才自动排除。保留云扩展、备份与通用安全条目，不按控制域泛化删除。匹配快照保留规则、答案及来源，界面展示具体理由；修改问卷沿用修订失效机制，旧评估显式加载新控制库后确认信息。
+Six scope questions drive versioned control applicability without affecting grading. Unknown answers remain candidates. Mixed development modes retain both sets; outsourced assurance is not a blanket exemption.
+
+
+## 2026-11-05：移除问卷附加材料
+
+已上传材料的下载链接旁增加“移除”，仅编辑者可用。移除立即保存，通过 system version、组织和评估归属检查，记录 evidence_id 审计；从当前问卷答案/备注取消引用，并排除后续拓扑快照与 PRD 生成。其他未保存的文字仍保留在编辑器，继续使用原保存流程。
+
+采用逻辑移除，文件内容、历史问卷快照、旧 PRD 和基线保持不变；已确认的信息沿用修订失效流程，必须重新确认。重试有幂等保护，过期版本不会移除。被移除 ID 不能通过旧答案重新引用，需要重新上传。无需数据库迁移或运行数据重置。
+
+`POST /systems/{id}/mlps-intake/evidence-removals` 接收 `version`、`evidence_id`；移除 ID 保存在系统 draft 的 `removed_mlps_evidence`，历史下载仍受原组织与评估权限控制。
+
+English: Editors can detach uploaded evidence from the current questionnaire and future PRDs. Files and immutable history remain available; confirmed facts require revision and reconfirmation. Unsaved authored text survives removal and conflict responses. Version checks, authorization, audit and idempotency remain mandatory.

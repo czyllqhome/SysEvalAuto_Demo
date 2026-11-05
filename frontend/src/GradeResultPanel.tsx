@@ -17,6 +17,6 @@ export default function GradeResultPanel({ detail }: { detail: SystemDetail }) {
   return <section className="mlps-intake mlps-grade-screen grade-result-snapshot">
     <Notice>{t('当前展示已确认的定级结果快照。查看不会重新计算等级或修改问卷。', 'This is the confirmed grading snapshot. Viewing does not recalculate the grade or change questionnaire answers.')}</Notice>
     <MLPSGradeResult readOnly assessment={assessment} answers={classification.answers ?? {}} notes={classification.notes ?? {}} questions={questionnaire as Question[]} frameworks={classification.frameworks ?? []} locked frameworkMode={classification.frameworks?.[0] ?? 'auto'} setFrameworkMode={() => {}} setFrameworks={() => {}} back={() => {}} confirm={() => {}} />
-    <div className="stage-actions">{gradingLink}<Link className="button" to={`/systems/${detail.system.id}/brief`}>{t('前往审查应用说明', 'Review application brief')}</Link></div>
+    <div className="stage-actions">{gradingLink}<Link className="button" to={`/systems/${detail.system.id}/information`}>{t('继续系统信息收集', 'Collect system information')}</Link></div>
   </section>
 }

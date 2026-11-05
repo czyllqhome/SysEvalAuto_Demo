@@ -17,7 +17,7 @@ const detail: SystemDetail = { system: { id: 'grade-view', name: 'Saved system',
   created_at: 1, updated_at: 1 }, permissions: ['read'], controls: [], prd: null, round: null, report: null, baseline: null }
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.unstubAllGlobals() })
-function show(value = detail, tab = 'brief', vendor = false) {
+function show(value = detail, tab = 'grade-result', vendor = false) {
   const fetcher = vi.fn(async (_url: string) => new Response(JSON.stringify(value)))
   vi.stubGlobal('fetch', fetcher)
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><LocaleProvider><AuthContext.Provider value={{ user: { id: 'u', name: 'Reader', email: 'reader@test', org_id: 'org', role: vendor ? 'vendor' : 'member' }, csrf: '', model_configured: false }}><Preferences><MemoryRouter initialEntries={[`/systems/grade-view/${tab}`]}><Routes><Route path="/systems/:id/:tab" element={<Workspace />} /></Routes></MemoryRouter></Preferences></AuthContext.Provider></LocaleProvider></QueryClientProvider>)
@@ -50,5 +50,20 @@ it('does not add the customer grading-result node to the supplier workflow', asy
   show(detail, 'grade-result', true)
   const nav = await screen.findByRole('navigation', { name: '评估步骤' })
   expect(within(nav).queryByRole('button', { name: /定级结果/ })).not.toBeInTheDocument()
+  expect(within(nav).queryByRole('button', { name: /PRD复核及下发/ })).not.toBeInTheDocument()
+  expect(within(nav).getAllByRole('button').map(button => button.textContent?.replace(/^[0-9]+/, ''))).toEqual(['供应商复核', '复核结果', '双方确认', '开发进度追踪'])
   expect(screen.queryByText('已确认的分级依据')).not.toBeInTheDocument()
+})
+
+it('shows all nine customer workflow stages in order', async () => {
+  show()
+  const nav = await screen.findByRole('navigation', { name: '评估步骤' })
+  expect(within(nav).getAllByRole('button').map(button => button.textContent?.replace(/^[0-9]+/, ''))).toEqual(['系统定级', '定级结果', '系统信息收集', '安全控制匹配', 'PRD复核及下发', '供应商复核', '复核结果', '双方确认', '开发进度追踪'])
+})
+
+it('redirects the legacy supplier PRD route to the single supplier review step', async () => {
+  show(detail, 'prd', true)
+  const nav = await screen.findByRole('navigation', { name: '评估步骤' })
+  expect(within(nav).getByRole('button', { name: /供应商复核/ })).toHaveAttribute('aria-current', 'step')
+  expect(within(nav).queryByRole('button', { name: /PRD复核及下发/ })).not.toBeInTheDocument()
 })

@@ -63,6 +63,7 @@
 .mlps-intake .mlps-severity label { padding:16px 10px; }
 .mlps-intake .mlps-severity b { font-size:27px; }
 .mlps-intake .mlps-evidence,.mlps-intake .mlps-upload { font-size:15px; line-height:1.7; }
+.mlps-evidence-item { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .mlps-intake .mlps-footer>span { font-size:16px; color:#3d526d; }
 .mlps-intake .button { font-size:16px; min-height:44px; padding:10px 16px; }
 .mlps-intake .mlps-results,.mlps-intake .mlps-results table,.mlps-intake .mlps-result-title p,.mlps-intake .mlps-result-title>span,.mlps-intake .mlps-result-grid>div,.mlps-intake .mlps-issues button { font-size:16px; line-height:1.8; }

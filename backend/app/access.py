@@ -7,9 +7,10 @@ from .domain import DomainError
 ROLES = {'manager', 'operator', 'reviewer', 'viewer', 'supplier'}
 EDIT_ACTIONS = {'prd.withdrawn', 'control.applicability_completed', 'context.draft_saved', 'classification.confirmed', 'context.confirmed',
                 'control.selection_changed', 'control.custom_added', 'prd.revised', 'job.queued'}
-REVIEW_ACTIONS = {'prd.approved', 'report.reviewed'}
+REVIEW_ACTIONS = {'prd.approved', 'report.reviewed', 'impact_analysis.requested'}
 EDIT_ACTIONS.update({'existing.started', 'existing.evidence_saved', 'existing.verification_saved',
                      'existing.plan_saved', 'existing.completion_saved'})
+EDIT_ACTIONS.add('mlps.evidence_removed')
 REVIEW_ACTIONS.update({'existing.report_reviewed', 'existing.retest_reviewed'})
 MANAGE_ACTIONS = {'supplier.round_published', 'supplier.invitation_reissued', 'negotiation.opened',
                  'baseline.frozen', 'baseline.confirmed', 'baseline.finalized'}

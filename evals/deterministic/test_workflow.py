@@ -72,7 +72,9 @@ def submit_supplier(owner):
                for req in result["prd"]["data"]["requirements"]}
     response = command(vendor, sid, "supplier-submit", {"round_version": result["round"]["version"],
                        "answers": answers, "mode": "local", "language": "en"}, key="submit-once")
-    assert response.json()["system"]["status"] == "ANALYZING"
+    assert response.json()["system"]["status"] == "RESULT_REVIEW"
+    assert response.json()["report"] is None
+    command(client, sid, 'jobs', {'kind': 'impact_analysis', 'mode': 'local', 'language': 'en'})
     assert asyncio.run(run_once(app.state.sessions))
     return app, client, vendor, sid
 
@@ -191,10 +193,10 @@ def test_submission_retry_reuses_immutable_publication(owner):
     first = vendor.post(f"/api/v1/systems/{sid}/supplier-submit", json=body, headers={"Idempotency-Key": "stable-submission"})
     repeated = vendor.post(f"/api/v1/systems/{sid}/supplier-submit", json=body, headers={"Idempotency-Key": "stable-submission"})
     assert first.status_code == repeated.status_code == 200
-    assert first.json()["job_id"] == repeated.json()["job_id"]
+    assert first.json()["submission_id"] == repeated.json()["submission_id"]
     with app.state.sessions() as db:
         assert db.scalar(select(func.count()).select_from(Submission)) == 1
-        assert db.scalar(select(func.count()).select_from(Job).where(Job.kind == "impact_analysis")) == 1
+        assert db.scalar(select(func.count()).select_from(Job).where(Job.kind == "impact_analysis")) == 0
 
 
 

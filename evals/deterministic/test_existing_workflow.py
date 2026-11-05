@@ -170,6 +170,7 @@ def test_supplier_confirmation_revision_and_development_reuse(owner):
                         'implementation_plan': 'Implement and verify'} for r in vendor_state['prd']['data']['requirements']}
     command(vendor, child, 'supplier-submit', {'round_version': vendor_state['round']['version'],
         'answers': answers, 'mode': 'local', 'language': 'en'})
+    command(client, child, 'jobs', {'kind': 'impact_analysis', 'mode': 'local', 'language': 'en'})
     assert asyncio.run(run_once(app.state.sessions))
     state = current(client, child)
     command(client, child, 'review-decisions', {'decisions': {f['id']: {'decision': 'accept', 'reason': 'Retest required'}

@@ -1,0 +1,56 @@
+.supplier-review-summary { color: var(--ink); }
+.commitment-round { padding: 8px 14px; border-radius: 6px; color: #2763a7; background: #eaf2fc; font-size: 13px; white-space: nowrap; }
+.commitment-overview, .commitment-list { border: 1px solid var(--rule); background: white; border-radius: 10px; padding: 24px; margin-bottom: 20px; }
+.commitment-overview-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.commitment-overview-heading h3 { margin: 0; font-size: 18px; }
+.commitment-overview-heading > span { font-size: 12px; color: var(--muted); }
+.commitment-disclaimer, .commitment-list-hint { color: var(--muted); font-size: 13px; line-height: 1.7; }
+.commitment-metrics { display: grid; grid-template-columns: 1.1fr 1.5fr 1fr 1fr; gap: 20px; margin: 24px 0; }
+.commitment-metrics > div, .commitment-metrics > button { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.commitment-metrics strong { font-size: 30px; line-height: 1.2; color: #213651; font-variant-numeric: tabular-nums; }
+.commitment-metrics span, .commitment-metrics small { color: var(--muted); font-size: 13px; }
+.commitment-metrics .commitment-distribution { font-size: 25px; overflow-wrap: anywhere; }
+.commitment-progress progress { width: 100%; height: 7px; accent-color: #3678bd; border: 0; border-radius: 4px; }
+.commitment-progress progress::-webkit-progress-bar { border-radius: 4px; background: #edf1f7; }
+.commitment-progress progress::-webkit-progress-value { border-radius: 4px; background: #3678bd; }
+.commitment-metrics .commitment-risk-metric { border: 1px solid #e3e7ef; border-radius: 8px; padding: 14px; background: #f8faff; text-align: left; cursor: pointer; }
+.commitment-risk-metric:hover { border-color: #85a7d4; }
+.commitment-risk-metric.high strong { color: #ab4b41; }
+.commitment-risk-metric.medium strong { color: #986a22; }
+.commitment-message { display: flex; gap: 14px; flex-wrap: wrap; padding: 12px 16px; border-radius: 7px; line-height: 1.6; font-size: 14px; }
+.commitment-message.attention { background: #fff5f2; border: 1px solid #f0cfc7; color: #944b3d; }
+.commitment-message.complete { background: #f0f8f5; border: 1px solid #c9e2d7; color: #356d56; }
+.commitment-filters { display: flex; flex-wrap: wrap; gap: 10px; }
+.commitment-filters button { border: 1px solid #c8d8ec; border-radius: 6px; padding: 8px 15px; color: #376aa9; background: #fff; min-height: 38px; }
+.commitment-filters button.active { color: #fff; background: #316eb5; border-color: #316eb5; }
+.commitment-search { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 14px; margin: 18px 0 10px; }
+.commitment-domain { margin-top: 24px; }
+.commitment-domain > h3 { margin: 0 0 10px; font-size: 16px; }
+.commitment-domain > h3 span { color: var(--muted); font-size: 13px; }
+.commitment-table-scroll { overflow-x: auto; }
+.commitment-domain table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.commitment-domain th { text-align: left; color: #455b79; font-size: 13px; padding: 12px 14px; background: #f4f7fb; border-bottom: 1px solid #dfe6f0; }
+.commitment-domain th:first-child { width: 48%; }
+.commitment-domain th:last-child { width: 20%; }
+.commitment-domain td { vertical-align: top; padding: 18px 14px; border-bottom: 1px solid #e6ebf2; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; }
+.commitment-domain td h4 { margin: 8px 0; font-size: 15px; }
+.commitment-domain td p { margin: 8px 0; }
+.commitment-domain td small, .commitment-follow-up { color: var(--muted); font-size: 12px; }
+.commitment-item-title { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.commitment-item-title code { font-size: 12px; }
+.commitment-badge { display: inline-block; padding: 2px 9px; border: 1px solid #d9e1ed; border-radius: 5px; font-size: 12px; line-height: 1.65; color: #65748a; background: #f7f9fc; }
+.commitment-badge.risk-high, .commitment-badge.status-no { color: #a84238; background: #fff0ed; border-color: #eac1bb; }
+.commitment-badge.risk-medium, .commitment-badge.status-partial { color: #91611c; background: #fff6e5; border-color: #e9d5ae; }
+.commitment-badge.status-needs_clarification { color: #5e588e; background: #f3f1fc; border-color: #dcd7ed; }
+.commitment-badge.status-yes { color: #326d55; background: #edf8f2; border-color: #cee4d8; }
+.commitment-row-high { background: #fffaf8; }
+.commitment-row-medium { background: #fffdf7; }
+.commitment-originals { margin-top: 14px; }
+.commitment-domain summary { font-size: 13px; color: #456c9b; cursor: pointer; }
+.commitment-originals > div { padding: 12px; margin: 10px 0; border: 1px solid var(--rule); border-radius: 5px; background: white; }
+.commitment-empty { padding: 36px 12px; color: var(--muted); text-align: center; }
+.commitment-next { border: 1px solid var(--rule); background: white; border-radius: 8px; padding: 18px 22px; margin-bottom: 20px; }
+.commitment-next > summary { font-weight: 600; cursor: pointer; color: #456181; }
+.commitment-next > .impact-review-page { margin-top: 24px; }
+@media (max-width: 1050px) { .commitment-metrics { grid-template-columns: 1fr 1fr; } .commitment-domain table { min-width: 650px; } }
+@media (max-width: 600px) { .commitment-overview, .commitment-list { padding: 16px; } .commitment-search { grid-template-columns: 1fr; } .commitment-overview-heading { align-items: flex-start; flex-direction: column; } .commitment-metrics { gap: 18px 12px; } .commitment-metrics strong { font-size: 26px; } .commitment-metrics .commitment-distribution { font-size: 22px; } }

@@ -202,6 +202,8 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         system.updated_at = time.time()
         system.version += 1
         audit_detail = {"revision": system.revision}
+        if action == 'mlps.evidence_removed':
+            audit_detail['evidence_id'] = body['evidence_id']
         if action == 'classification.confirmed' and system.classification.get('scheme') == 'MLPS-INTAKE/1':
             audit_detail['classification_snapshot'] = system.classification
         if action == 'context.draft_saved' and body.get('scheme') == 'MLPS-INTAKE/1':
@@ -412,6 +414,13 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         return command(request, db, user, system, body, "classification.confirmed",
                        lambda: service.confirm_classification(db, system, body))
 
+    @app.post('/api/v1/systems/{system_id}/information-confirmations')
+    def information_confirmation(system_id: str, body: dict, request: Request, user=Depends(current), db=Depends(get_db)):
+        from .mlps_intake import confirm_information
+        system = service.system_for(db, user, system_id, write=True)
+        return command(request, db, user, system, body, 'context.confirmed',
+                       lambda: confirm_information(db, system, body))
+
     @app.post("/api/v1/systems/{system_id}/context-confirmations")
     def context_confirmation(system_id: str, body: dict, request: Request, user=Depends(current), db=Depends(get_db)):
         system = service.system_for(db, user, system_id, write=True)
@@ -439,7 +448,7 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         page = max(1, page)
         from .db import LibraryRelease
         release = db.get(LibraryRelease, catalog_id)
-        labels = {d['code']: [d['zh'], d['en']] for d in release.data['config']['domains']} if release else {}
+        labels = {d['code']: [d['zh'], d.get('en') or d['zh']] for d in release.data['config']['domains']} if release else {}
         return {"items": [control_snapshot(row) for row in rows[(page - 1) * 100:page * 100]],
                 "total": len(rows), "page": page, "domains": list(labels) or DOMAINS, "domain_labels": labels}
 
@@ -549,6 +558,8 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         system = service.system_for(db, user, system_id, write=True)
         def operation():
             kind = body.get('kind')
+            if not isinstance(kind, str) or kind.startswith('delivery_evidence:'):
+                raise DomainError('INVALID_JOB_TYPE')
             if kind == 'function_expansion':
                 function_id = body.get('function_id')
                 if not isinstance(function_id, str) or not function_id:
@@ -561,7 +572,8 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
                              'import_blocks': dict(system.draft.get('blocks', {})),
                              'import_edits': dict(system.draft.get('block_edits', {}))}
             return {"job_id": job.id}
-        return command(request, db, user, system, body, "job.queued", operation)
+        action = 'impact_analysis.requested' if body.get('kind') == 'impact_analysis' else 'job.queued'
+        return command(request, db, user, system, body, action, operation)
 
     @app.get("/api/v1/jobs/{job_id}")
     def get_job(job_id: str, user=Depends(current), db=Depends(get_db)):
@@ -604,15 +616,22 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         def operation():
             service.require_state(system, "PRD_REVIEW")
             original = db.get(Prd, system.prd_id)
+            refresh_template = body.get('refresh_template', False)
+            if type(refresh_template) is not bool:
+                raise DomainError('INVALID_FIELDS')
+            if refresh_template and body.get('prd_id') != original.id:
+                raise DomainError('VERSION_CONFLICT', 409)
             source = service.job_input(db, system, "prd_generation")
-            data = validate_prd(body.get("data", {}), system.context, source["controls"])
+            data = validate_prd(original.data if refresh_template else body.get("data", {}), system.context, source["controls"])
             from . import prd_templates
-            pinned = prd_templates.recorded(db, original)
+            pinned = prd_templates.snapshot(db, system.org_id) if refresh_template else prd_templates.recorded(db, original)
+            mode = original.mode if refresh_template else 'manual'
+            source = {**source, 'generation_mode': mode}
             from .topology import embed
             source = {**source, 'network_topology': embed(db, system.id, source.get('network_topology', []))}
             markdown = render_prd(data, source, original.language, pinned)
             edited = Prd(system_id=system.id, revision=system.revision, language=original.language,
-                         mode="manual", data=data, markdown=markdown,
+                         mode=mode, data=data, markdown=markdown,
                          content_hash=digest({"data": data, "markdown": markdown, "renderer": "R1"}))
             db.add(edited)
             db.flush()
@@ -679,6 +698,7 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
             round_ = SupplierRound(system_id=system.id, supplier_org_id=org_id, prd_id=prd.id,
                                    snapshot={"controls": [s.snapshot for s in service.selections(db, system, included_only=True)],
                                              "context": system.context, "classification": system.classification,
+                                             "questionnaire": service.job_input(db, system, 'prd_generation')['questionnaire'],
                                              "context_revision_id": system.context_revision_id})
             db.add(round_)
             db.flush()
@@ -732,8 +752,8 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         if not round_:
             raise DomainError("ROUND_CLOSED", 409)
         def operation():
-            job = service.save_submission(db, system, round_, user, body)
-            return {"job_id": job.id}
+            submission = service.save_submission(db, system, round_, user, body)
+            return {"submission_id": submission.id}
         return command(request, db, user, system, body, "supplier.submitted", operation)
 
     @app.post("/api/v1/systems/{system_id}/requirement-risk")
@@ -754,7 +774,7 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         version, report_id = system.version, system.report_id
         from .db import Prd
         originals = service.impact_control_originals(db, system, db.get(Prd, system.prd_id)).get(rid, [])
-        source = ai.redact_source({'prd': {'requirements': requirements}, 'answers': {rid: source['answers'][rid]}})
+        source = ai.redact_source({**source, 'prd': {'requirements': requirements}, 'answers': {rid: source['answers'][rid]}})
         source['control_originals'] = originals
         config = ai_settings.snapshot(db, system.org_id)
         config['prompts']['impact_analysis'] += (' For this single requirement, describe potential security risks, '
@@ -769,7 +789,7 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         system = service.system_for(db, user, system_id, write=user.role != 'vendor')
         if system.version != version or system.report_id != report_id:
             raise DomainError('VERSION_CONFLICT', 409)
-        output = validate_report(output, requirements, source['answers'])
+        output = validate_report(output, requirements, source['answers'], contextual_source=source)
         access.audit(db, user, 'impact.single_requirement_analyzed',
                      {'system_id': system_id, 'report_id': report_id, 'requirement_id': rid, 'usage': usage})
         db.commit()
@@ -821,6 +841,21 @@ def create_app(url: str | None = None, embedded_worker: bool | None = None):
         system = service.system_for(db, user, baseline.system_id, write=True)
         return command(request, db, user, system, body, "baseline.finalized",
                        lambda: service.finalize(db, system, baseline, user))
+
+    @app.get('/api/v1/baselines/{baseline_id}/document')
+    def final_document(baseline_id: str, user=Depends(current), db=Depends(get_db)):
+        from .final_document import render
+        baseline = db.get(Baseline, baseline_id)
+        if not baseline:
+            raise DomainError('NOT_FOUND', 404)
+        system = service.system_for(db, user, baseline.system_id)
+        if user.role == 'vendor' and user.org_id != baseline.payload['supplier_org_id']:
+            raise DomainError('NOT_FOUND', 404)
+        if system.baseline_id != baseline.id:
+            raise DomainError('BASELINE_CHANGED', 409)
+        return PlainTextResponse(render(db, baseline), headers={
+            'Content-Disposition': f'attachment; filename="Final-PRD-{baseline.id[:8]}.md"',
+            'Cache-Control': 'no-store'})
 
     @app.get("/api/v1/systems/{system_id}/history")
     def history(system_id: str, user=Depends(current), db=Depends(get_db)):
