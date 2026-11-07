@@ -4,12 +4,12 @@
     "answer": {
       "implementation_status": "no",
       "duration_workdays": null,
-      "estimated_start_date": null,
-      "estimated_finish_date": null,
-      "owner_name": "演示交付负责人",
-      "implementation_plan": "演示安排：预计 20 个工作日完成替换方案评估和验证；此估算不代表已承诺本期完成整改。",
+      "owner_name": "交付负责人",
+      "implementation_plan": "预计 20 个工作日完成替换方案评估和验证；此估算不代表已承诺本期完成整改。",
       "limitations": "现有远程维护组件不支持加密鉴别信息传输，供应商无法在本期交付范围内完成组件替换，因此暂不能满足本项要求。",
-      "alternative": "停用该组件的远程管理入口，仅允许经审批的现场维护；通过网络访问控制阻断远程管理端口，保留变更审批和操作日志。组件替换并验证传输加密前，不恢复远程管理。请负责人判断临时方案及后续改造范围。"
+      "alternative": "停用该组件的远程管理入口，仅允许经审批的现场维护；通过网络访问控制阻断远程管理端口，保留变更审批和操作日志。组件替换并验证传输加密前，不恢复远程管理。请负责人判断临时方案及后续改造范围。",
+      "estimated_start_date": null,
+      "estimated_finish_date": null
     }
   },
   {
@@ -17,12 +17,12 @@
     "answer": {
       "implementation_status": "needs_clarification",
       "duration_workdays": 5,
-      "estimated_start_date": null,
-      "estimated_finish_date": null,
-      "owner_name": "演示交付负责人",
-      "implementation_plan": "演示安排：预计 5 个工作日完成责任澄清、收集防护与更新记录，并提交负责人复核。",
+      "owner_name": "交付负责人",
+      "implementation_plan": "预计 5 个工作日完成责任澄清、收集防护与更新记录，并提交负责人复核。",
       "limitations": "应用拟部署在托管云环境中，供应商尚未确认宿主机与容器的防恶意代码能力由云服务商还是客户负责，也未获得覆盖范围、更新策略及检测记录。请负责人明确责任边界和验收证据要求。",
-      "alternative": "在责任明确前，对交付镜像、依赖包和上传文件执行恶意代码扫描，仅使用受信镜像并限制运行权限；涉及宿主机的防护及更新记录由责任方提供。上述措施的覆盖范围需由负责人确认，不能视为已经满足全部要求。"
+      "alternative": "在责任明确前，对交付镜像、依赖包和上传文件执行恶意代码扫描，仅使用受信镜像并限制运行权限；涉及宿主机的防护及更新记录由责任方提供。上述措施的覆盖范围需由负责人确认，不能视为已经满足全部要求。",
+      "estimated_start_date": null,
+      "estimated_finish_date": null
     }
   },
   {
@@ -30,12 +30,12 @@
     "answer": {
       "implementation_status": "needs_clarification",
       "duration_workdays": 3,
-      "estimated_start_date": null,
-      "estimated_finish_date": null,
-      "owner_name": "演示交付负责人",
-      "implementation_plan": "演示安排：预计 3 个工作日明确审批及备案流程，并提交一份脱敏的申请、授权和销户记录样例。",
+      "owner_name": "交付负责人",
+      "implementation_plan": "预计 3 个工作日明确审批及备案流程，并提交一份脱敏的申请、授权和销户记录样例。",
       "limitations": "外部维护人员的接入审批、账号开设和备案由客户侧管理，但当前尚未明确审批人、申请模板、权限范围及账号有效期。请负责人确认客户与供应商各自职责，以及需要保留的审批和备案材料。",
-      "alternative": "流程确认前不开放常驻外部账号；确需访问时先留存书面批准，由指定管理员开设实名、最小权限且限时的账号，记录访问过程并在到期后禁用。账号清单和审批记录交负责人复核。"
+      "alternative": "流程确认前不开放常驻外部账号；确需访问时先留存书面批准，由指定管理员开设实名、最小权限且限时的账号，记录访问过程并在到期后禁用。账号清单和审批记录交负责人复核。",
+      "estimated_start_date": null,
+      "estimated_finish_date": null
     }
   }
 ]

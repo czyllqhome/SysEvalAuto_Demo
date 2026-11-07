@@ -1,3 +1,5 @@
+> 2026-11-06：供应商答复页 Demo 重新采集当前已保存轮次（版本 8）：146 项可完成、1 项无法完成、2 项待澄清；三条例外保留最新负责人及实施安排原文，工期为空 / 3 / 5 天。旧模板位于 `evals/fixtures/backups/supplier-demo-20261106-before-recapture/`。填入、保存草稿与撤销方式保持一致。 Supplier Demo recaptured from the saved draft; authored Chinese text is preserved across interface languages.
+
 > 2026-11-06：负责人已下发的逐项整改，在本轮全部确认可完成后自动冻结完整承诺并进入双方确认；客户与供应商仍须独立确认相同 hash。旧复核/供应商链接自动转向已有待确认基线。Scoped remediation completion automatically prepares and opens joint confirmation; independent same-hash signatures remain required.
 
 > 2026-11-06：供应商已确认可完成的条目直接计入开发承诺，负责人只处理部分完成、无法完成和待澄清项；全部可完成时可直接冻结并收集双方确认。汇总改为四个可点击的状态统计块。Confirmed commitments and exception-only owner review: [docs/supplier-prd-delivery.md](docs/supplier-prd-delivery.md).
